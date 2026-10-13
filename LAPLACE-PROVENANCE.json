@@ -1,0 +1,32 @@
+{
+  "name": "Slack MCP for Laplace \u2014 Patchright edition",
+  "version": "1.0.0-laplace.patchright.1",
+  "upstreamRepository": "https://github.com/korotovsky/slack-mcp-server",
+  "upstreamCommit": "b88c0de3f706f4f07337c9eda7133c736d1c9524",
+  "patchrightVersion": "1.63.0",
+  "distribution": "source archive; dependencies and binary built locally",
+  "changes": [
+    "Browser authentication and stdio launcher use official Node Patchright with a dedicated workspace profile",
+    "Reject user and bot OAuth tokens at launcher and Go server startup",
+    "Replace slackdump/slackauth authentication imports with a browser-session-only provider; remove transitive Playwright and Rod modules",
+    "Remove upstream DXT token-entry manifest and replace installation/authentication docs",
+    "Preserve upstream MCP tool handlers and API transport"
+  ],
+  "validation": {
+    "platform": "macOS arm64",
+    "goVersion": "go1.27.2",
+    "goOfflineTests": "passed: go test -skip TestIntegration ./...",
+    "goBuild": "passed",
+    "nodeTests": "4 passed, including real local Patchright persistent-profile smoke test",
+    "oauthStartupRejection": "passed for user and bot tokens; launcher stdout stays empty",
+    "realSlackSignIn": "not performed",
+    "authenticatedSlackRead": "not performed",
+    "windowsAndLinuxAcceptance": "not performed"
+  },
+  "excludedLegacyPackaging": [
+    "upstream npm publishing directories",
+    "upstream Docker images and Makefile release targets",
+    "upstream GitHub publishing workflows"
+  ],
+  "license": "MIT; upstream LICENSE retained; Patchright dependencies retain their licenses"
+}

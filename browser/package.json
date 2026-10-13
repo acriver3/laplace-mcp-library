@@ -1,0 +1,14 @@
+{
+  "name": "@laplace/slack-patchright",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "test": "node --test",
+    "install-browser": "patchright install chromium",
+    "start": "node cli.mjs"
+  },
+  "dependencies": { "patchright": "1.63.0" }
+}
