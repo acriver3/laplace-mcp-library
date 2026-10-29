@@ -323,10 +323,11 @@
           "win32-x64"
         ],
         "published": true,
-        "candidate": true,
+        "candidate": false,
         "acceptance": [],
         "path": "bundles/slack-mcp-server/1.1.0-laplace.1/slack-mcp-server-1.1.0-laplace.1-win32-x64.mcpb",
-        "url": "https://raw.githubusercontent.com/acriver3/laplace-mcp-library/slack-mcp-server-v1.1.0-laplace.1/bundles/slack-mcp-server/1.1.0-laplace.1/slack-mcp-server-1.1.0-laplace.1-win32-x64.mcpb"
+        "url": "https://raw.githubusercontent.com/acriver3/laplace-mcp-library/slack-mcp-server-v1.1.0-laplace.1/bundles/slack-mcp-server/1.1.0-laplace.1/slack-mcp-server-1.1.0-laplace.1-win32-x64.mcpb",
+        "supported": true
       },
       {
         "name": "slack-mcp-server-1.1.0-laplace.1-darwin-x64.mcpb",
@@ -336,10 +337,11 @@
           "darwin-x64"
         ],
         "published": true,
-        "candidate": true,
+        "candidate": false,
         "acceptance": [],
         "path": "bundles/slack-mcp-server/1.1.0-laplace.1/slack-mcp-server-1.1.0-laplace.1-darwin-x64.mcpb",
-        "url": "https://raw.githubusercontent.com/acriver3/laplace-mcp-library/slack-mcp-server-v1.1.0-laplace.1/bundles/slack-mcp-server/1.1.0-laplace.1/slack-mcp-server-1.1.0-laplace.1-darwin-x64.mcpb"
+        "url": "https://raw.githubusercontent.com/acriver3/laplace-mcp-library/slack-mcp-server-v1.1.0-laplace.1/bundles/slack-mcp-server/1.1.0-laplace.1/slack-mcp-server-1.1.0-laplace.1-darwin-x64.mcpb",
+        "supported": true
       },
       {
         "name": "slack-mcp-server-1.1.0-laplace.1-darwin-arm64.mcpb",
@@ -349,10 +351,11 @@
           "darwin-arm64"
         ],
         "published": true,
-        "candidate": true,
+        "candidate": false,
         "acceptance": [],
         "path": "bundles/slack-mcp-server/1.1.0-laplace.1/slack-mcp-server-1.1.0-laplace.1-darwin-arm64.mcpb",
-        "url": "https://raw.githubusercontent.com/acriver3/laplace-mcp-library/slack-mcp-server-v1.1.0-laplace.1/bundles/slack-mcp-server/1.1.0-laplace.1/slack-mcp-server-1.1.0-laplace.1-darwin-arm64.mcpb"
+        "url": "https://raw.githubusercontent.com/acriver3/laplace-mcp-library/slack-mcp-server-v1.1.0-laplace.1/bundles/slack-mcp-server/1.1.0-laplace.1/slack-mcp-server-1.1.0-laplace.1-darwin-arm64.mcpb",
+        "supported": true
       },
       {
         "name": "slack-mcp-server-1.1.0-laplace.1-linux-x64.mcpb",
@@ -362,10 +365,11 @@
           "linux-x64"
         ],
         "published": true,
-        "candidate": true,
+        "candidate": false,
         "acceptance": [],
         "path": "bundles/slack-mcp-server/1.1.0-laplace.1/slack-mcp-server-1.1.0-laplace.1-linux-x64.mcpb",
-        "url": "https://raw.githubusercontent.com/acriver3/laplace-mcp-library/slack-mcp-server-v1.1.0-laplace.1/bundles/slack-mcp-server/1.1.0-laplace.1/slack-mcp-server-1.1.0-laplace.1-linux-x64.mcpb"
+        "url": "https://raw.githubusercontent.com/acriver3/laplace-mcp-library/slack-mcp-server-v1.1.0-laplace.1/bundles/slack-mcp-server/1.1.0-laplace.1/slack-mcp-server-1.1.0-laplace.1-linux-x64.mcpb",
+        "supported": true
       }
     ],
     "reviewEvidence": [
@@ -376,6 +380,18 @@
       "Includes precompiled Go server, Node 24.19.0 and locked Patchright 1.63.0 dependencies.",
       "First login downloads Chromium automatically; serve never downloads or opens a login window.",
       "Linux offline startup and local browser checks are recorded separately from real Slack sign-in; native Windows/macOS acceptance is pending."
-    ]
+    ],
+    "releaseStatus": "released",
+    "releaseApproval": {
+      "date": "2026-10-29",
+      "basis": "User explicitly approved marking version 1.1.0-laplace.1 supported and released.",
+      "platforms": [
+        "win32-x64",
+        "darwin-x64",
+        "darwin-arm64",
+        "linux-x64"
+      ],
+      "verification": "Existing automated evidence retained; approval does not assert additional authenticated or native-platform tests."
+    }
   }
 ]

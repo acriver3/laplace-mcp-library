@@ -8,6 +8,9 @@ Browser sessions stay in a dedicated profile outside the bundle.
 
 ## Choose a bundle
 
+Version 1.1.0-laplace.1 is released and supported on the four targets below,
+with owner approval. The verification column records test coverage separately.
+
 | Operating system | Bundle suffix | Verification |
 | --- | --- | --- |
 | Windows x64 | `win32-x64.mcpb` | Cross-compiled; native login acceptance pending |

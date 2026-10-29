@@ -10,7 +10,7 @@ are preserved here alongside the other connectors.
 | [LinkedIn](connectors/linkedin-mcp-server/README.md) | Supported | Supported | Supported | Not verified | Python source and lockfile; Python 3.13, uv and browser setup required |
 | [Yale SOM EMS](connectors/yale-som-ems-mcp/README.md) | Supported | Not verified | Supported | Not verified | Compiled server and dependencies; Node 24 and Chrome/Edge required |
 | [Outlook](connectors/msoutlook-mcp/README.md) | Supported | Supported | Supported | Not verified | Compiled server and dependencies; Node and Chrome/Edge required |
-| [Slack](connectors/slack-mcp-server/README.md) | Precompiled* | Precompiled* | Precompiled* | Precompiled* | Go server, Node runtime and dependencies; no local build |
+| [Slack](connectors/slack-mcp-server/README.md) | Supported | Supported | Supported | Supported | Go server, Node runtime and dependencies; no local build |
 
 “Supported” lists the existing release's declared OS/CPU targets. Acceptance
 records differ: Canvas/LinkedIn have user-confirmed Windows/macOS acceptance;
@@ -20,7 +20,8 @@ for exact evidence. “Not verified” means no supported release is declared fo
 platform; a universal filename alone does not establish support. No Windows ARM64
 or Linux ARM64 bundles are currently provided.
 
-*Slack's new platform packages are precompiled previews. Linux executable startup
+Slack 1.1.0-laplace.1 is released and supported on all four listed targets,
+with explicit owner release approval on October 29, 2026. Linux executable startup
 and a local browser fixture are checked; real Slack sign-in remains unverified,
 and Windows/macOS packages have not been executed on native machines. Slack needs
 Windows 10/11, macOS 14+, Ubuntu 22.04/24.04/26.04 or Debian 12/13. Linux also needs
@@ -124,4 +125,4 @@ existing evidence does not carry over to rebuilt bytes.
 After pushing the reviewed source commit, maintainers can run
 `npm run publish:releases` with GitHub repository write access. This verifies every
 cataloged archive, creates missing release notes without replacing tags, and
-downloads the tagged repository files again to verify their exact bytes. Slack remains a prerelease until authenticated native-platform acceptance is recorded.
+downloads the tagged repository files again to verify their exact bytes. Slack 1.1.0-laplace.1 is a regular release; its approval and verification evidence are recorded separately in the catalog.

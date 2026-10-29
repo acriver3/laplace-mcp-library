@@ -32,7 +32,9 @@ Validation:
 Windows x64, macOS Intel and macOS Apple Silicon are cross-compiled package targets;
 they have not been executed on native machines in this environment. Packages are
 not notarized. Real Slack sign-in, MFA, authenticated tool discovery/read and
-native-platform acceptance remain unperformed. The new bundles remain prereleases;
-precompiled distribution does not imply authenticated production acceptance.
+native-platform acceptance remain unperformed. On October 29, 2026, the user
+explicitly approved marking these exact bundles supported and released. The release
+was promoted without rebuilding or changing artifact bytes. Release approval does
+not imply additional authenticated testing.
 
 The old source-only 1.0.0-laplace.patchright.1 bundle and release remain unchanged.
