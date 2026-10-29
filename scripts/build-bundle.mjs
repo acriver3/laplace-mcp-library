@@ -13,7 +13,7 @@ const catalog = JSON.parse(readFileSync(join(root, 'catalog/local-mcp-bundles.js
 const entry = catalog.find(item => item.id === id);
 assert(entry, 'Unknown connector');
 assert(version !== entry.version, 'Use a new version; published or recorded versions are immutable');
-const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => /^(PATH|Path|HOME|USERPROFILE|SystemRoot|WINDIR|COMSPEC|TEMP|TMP|TMPDIR|LANG|LC_ALL)$/.test(key)));
+const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => /^(PATH|Path|HOME|USERPROFILE|SystemRoot|WINDIR|COMSPEC|TEMP|TMP|TMPDIR|LANG|LC_ALL|HTTP_PROXY|HTTPS_PROXY|ALL_PROXY|NO_PROXY|http_proxy|https_proxy|all_proxy|no_proxy|NODE_EXTRA_CA_CERTS|SSL_CERT_FILE|SSL_CERT_DIR)$/.test(key)));
 function run(command, args, cwd = root, options = {}) {
   return execFileSync(command, args, { cwd, env, stdio: 'inherit', ...options });
 }
@@ -36,7 +36,9 @@ if (id === 'canvas-session-mcp') {
   rmSync(join(stage, 'node_modules/.vite'), { recursive: true, force: true });
 } else if (id === 'slack-mcp-server') {
   // Source bundle: the user installs locked Patchright and builds Go on their OS.
+  npmRun(['ci', '--ignore-scripts', '--no-audit', '--no-fund'], join(stage, 'browser'));
   run(process.execPath, ['--test'], join(stage, 'browser'));
+  rmSync(join(stage, 'browser/node_modules'), { recursive: true, force: true });
 } else assert.equal(id, 'linkedin-mcp-server');
 const manifestPath = join(stage, 'manifest.json');
 const manifest = JSON.parse(readFileSync(manifestPath));

@@ -48,7 +48,7 @@ def zip_entries(data):
 def normalize(bundle, stage):
     entries = zip_entries(bundle.read_bytes())
     # MCPB's default exclusions omit the npm lockfile; retain the reviewed lockfile too.
-    for name in ["package-lock.json", "browser/package-lock.json", "uv.lock"]:
+    for name in ["package-lock.json", "browser/package-lock.json", "uv.lock", "tsconfig.json"]:
         if (stage / name).is_file():
             entries[name] = ((stage / name).read_bytes(), 0o644)
     output = io.BytesIO()
