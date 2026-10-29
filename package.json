@@ -3,7 +3,15 @@
   "version": "1.0.0",
   "private": true,
   "description": "Laplace-maintained local MCP sources and MCPB bundles",
-  "scripts": { "build:bundle": "node scripts/build-bundle.mjs", "verify": "python3 scripts/verify.py" },
-  "devDependencies": { "@anthropic-ai/mcpb": "2.1.2" },
-  "engines": { "node": ">=24" }
+  "scripts": {
+    "build:bundle": "node scripts/build-bundle.mjs",
+    "verify": "python3 scripts/verify.py",
+    "publish:releases": "python3 scripts/publish-releases.py"
+  },
+  "devDependencies": {
+    "@anthropic-ai/mcpb": "2.1.2"
+  },
+  "engines": {
+    "node": ">=24"
+  }
 }

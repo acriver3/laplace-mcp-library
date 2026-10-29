@@ -93,3 +93,8 @@ checksum, size, safe ZIP paths and manifest identity. Download existing release
 assets there to verify a fresh checkout. Missing archives are reported as errors.
 Authenticated acceptance must be recorded against each exact archive and platform;
 existing evidence does not carry over to rebuilt bytes.
+
+After pushing the reviewed source commit, maintainers can run
+`npm run publish:releases` with GitHub repository write access. This verifies every
+cataloged archive, creates missing releases without replacing assets, and downloads
+the published assets again to verify their exact bytes. Slack is a prerelease.
