@@ -1,0 +1,81 @@
+{
+  "manifest_version": "0.3",
+  "name": "canvas-session-mcp",
+  "display_name": "Canvas for Laplace Local",
+  "version": "0.1.0-laplace.1",
+  "description": "Read courses, assignments, announcements and grades using your Canvas browser login.",
+  "author": {
+    "name": "CorCvusRamboChen",
+    "url": "https://github.com/CorCvusRamboChen/canvas-session-mcp"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CorCvusRamboChen/canvas-session-mcp"
+  },
+  "license": "MIT",
+  "privacy_policies": [
+    "https://www.instructure.com/policies/privacy"
+  ],
+  "server": {
+    "type": "node",
+    "entry_point": "bin/cli.js",
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/bin/cli.js"
+      ],
+      "env": {
+        "CANVAS_URL": "${user_config.canvas_url}",
+        "CANVAS_MCP_HOME": "${user_config.session_dir}",
+        "CANVAS_MCP_DOWNLOADS": "${user_config.downloads_dir}",
+        "CANVAS_MCP_BROWSER": "${user_config.browser}"
+      }
+    }
+  },
+  "compatibility": {
+    "platforms": [
+      "win32",
+      "darwin"
+    ],
+    "runtimes": {
+      "node": ">=20"
+    }
+  },
+  "tools_generated": true,
+  "user_config": {
+    "canvas_url": {
+      "type": "string",
+      "title": "Canvas institution URL",
+      "description": "Your institution's Canvas HTTPS address.",
+      "required": true
+    },
+    "session_dir": {
+      "type": "directory",
+      "title": "Dedicated Canvas session directory",
+      "description": "A dedicated local session directory outside the bundle.",
+      "required": true,
+      "default": "${HOME}/.laplace-local/sessions/canvas-session"
+    },
+    "downloads_dir": {
+      "type": "directory",
+      "title": "Course download folder",
+      "description": "Where to save course files on your computer.",
+      "required": true,
+      "default": "${DOCUMENTS}/Canvas"
+    },
+    "browser": {
+      "type": "string",
+      "title": "Browser channel (chrome or msedge)",
+      "description": "The installed browser to use for interactive sign-in.",
+      "default": "chrome"
+    }
+  },
+  "_meta": {
+    "com.withlaplace.catalog": {
+      "upstream_commit": "9780f271fafc280498080222fe33374ac346fb03",
+      "patches": [
+        "canvas-cookie-origin.patch"
+      ]
+    }
+  }
+}

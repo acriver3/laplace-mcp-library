@@ -1,5 +1,11 @@
-browser/node_modules/
-build/
-dist/
+node_modules/
+.artifacts/
+.build/
 .env
+.env.local
 .DS_Store
+__pycache__/
+dist/
+build/
+.venv/
+.pytest_cache/

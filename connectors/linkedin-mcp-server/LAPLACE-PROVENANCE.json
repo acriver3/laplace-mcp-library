@@ -1,0 +1,8 @@
+{
+  "id": "linkedin-mcp-server",
+  "version": "4.26.2-laplace.1",
+  "repository": "https://github.com/stickerdaniel/linkedin-mcp-server",
+  "upstreamCommit": "01c2d5e036bb364efe5fde2546c8fd550b4f89f2",
+  "upstreamVersion": "4.26.2",
+  "patches": []
+}

@@ -1,0 +1,50 @@
+{
+  "manifest_version": "0.3",
+  "name": "slack-mcp-server",
+  "display_name": "Slack for Laplace Local",
+  "version": "1.0.0-laplace.patchright.1",
+  "description": "Slack MCP using dedicated Patchright browser sign-in. Source bundle: install Node dependencies and build Go before attaching.",
+  "author": {
+    "name": "Laplace"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/acriver3/laplace-mcp-library"
+  },
+  "license": "MIT",
+  "server": {
+    "type": "node",
+    "entry_point": "browser/cli.mjs",
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/browser/cli.mjs",
+        "serve",
+        "--workspace",
+        "${user_config.workspace}"
+      ],
+      "env": {
+        "SLACK_MCP_ENABLED_TOOLS": "channels_list,conversations_history,conversations_replies,conversations_search_messages"
+      }
+    }
+  },
+  "compatibility": {
+    "platforms": [
+      "win32",
+      "darwin",
+      "linux"
+    ],
+    "runtimes": {
+      "node": ">=22"
+    }
+  },
+  "user_config": {
+    "workspace": {
+      "type": "string",
+      "title": "Slack workspace URL",
+      "description": "Your HTTPS Slack workspace URL. Complete login separately using browser/cli.mjs login.",
+      "required": true
+    }
+  },
+  "tools_generated": true
+}

@@ -1,0 +1,63 @@
+{
+  "manifest_version": "0.3",
+  "name": "yale-som-ems-mcp",
+  "display_name": "Yale SOM EMS for Laplace Local",
+  "version": "0.1.0",
+  "description": "Find student rooms and preview one-time booking changes using your dedicated Yale SOM EMS browser login.",
+  "author": {
+    "name": "Laplace",
+    "url": "https://github.com/acriver3/Laplace"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/acriver3/Laplace"
+  },
+  "license": "UNLICENSED",
+  "server": {
+    "type": "node",
+    "entry_point": "dist/cli.js",
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/dist/cli.js",
+        "serve",
+        "--profile-dir",
+        "${user_config.profile_dir}",
+        "--browser",
+        "${user_config.browser}"
+      ]
+    }
+  },
+  "compatibility": {
+    "platforms": [
+      "win32",
+      "darwin"
+    ],
+    "runtimes": {
+      "node": ">=24"
+    }
+  },
+  "tools_generated": true,
+  "user_config": {
+    "profile_dir": {
+      "type": "directory",
+      "title": "Dedicated Yale SOM EMS profile",
+      "description": "A dedicated local browser profile outside the versioned bundle.",
+      "required": true,
+      "default": "${HOME}/.laplace-local/sessions/yale-som-ems/profile"
+    },
+    "browser": {
+      "type": "string",
+      "title": "Browser channel (chrome or msedge)",
+      "description": "Installed Chrome or Edge used for Yale SSO/MFA and EMS.",
+      "default": "chrome"
+    }
+  },
+  "_meta": {
+    "com.withlaplace.catalog": {
+      "upstream_commit": "ed48ceb9d04e2a3a352c70ff275cf534f99e79b8",
+      "patches": [],
+      "source_subdirectory": "apps/yale-som-ems-mcp"
+    }
+  }
+}

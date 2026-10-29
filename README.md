@@ -1,48 +1,95 @@
-# Slack MCP — Laplace Patchright edition
+# Laplace MCP Library
 
-A browser-session-only fork of [korotovsky/slack-mcp-server](https://github.com/korotovsky/slack-mcp-server), based on commit `b88c0de3f706f4f07337c9eda7133c736d1c9524`.
+The home for Laplace-maintained local MCP source code and MCPB bundles.
+Previously named `slack-mcp-server-patchright`; the Slack fork and its Git history
+are preserved here alongside the other connectors.
 
-Slack sign-in uses the official Node.js Patchright package with a dedicated Chromium profile. Complete sign-in and MFA yourself. OAuth, bot tokens, manual token entry, and importing your normal browser profile are not supported connection options. Existing MCP tools still call Slack APIs using the browser session; this is not a browser-driven implementation of every Slack operation.
+| MCP | Source and setup | Distribution |
+| --- | --- | --- |
+| Canvas | [Connector README](connectors/canvas-session-mcp/README.md) | Versioned MCPB |
+| LinkedIn | [Connector README](connectors/linkedin-mcp-server/README.md) | Versioned MCPB |
+| Yale SOM EMS | [Connector README](connectors/yale-som-ems-mcp/README.md) | Versioned MCPB |
+| Outlook | [Connector README](connectors/msoutlook-mcp/README.md) | Versioned MCPB |
+| Slack | [Patchright README](connectors/slack-mcp-server/README.md) | Source MCPB candidate; local build required |
 
-## Setup
+## Install through Laplace Local
 
-Requires Node.js 22+, Go 1.25+ for building, and a desktop for initial login. These commands work from the extracted source folder:
+1. Find the connector in [the catalog](catalog/local-mcp-bundles.json) and download
+   its MCPB from [Releases](https://github.com/acriver3/laplace-mcp-library/releases).
+   Check its exact SHA-256 and byte length against the catalog before extraction
+   or execution. Release notes distinguish published bundles from candidates.
+2. Extract into a persistent, versioned local folder. Read the connector README
+   and `manifest.json` for prerequisites, local configuration and sign-in.
+   MCPB is a ZIP archive. It does not guarantee that runtimes or browsers are embedded.
+3. Reuse or set up Laplace Local using your Laplace account's setup page. Resolve
+   manifest placeholders to local absolute paths and your chosen settings; write
+   the resulting command, args and env into a local JSON `mcpServers` entry.
+   Keep credentials and browser sessions outside this repository and bundle folders.
+4. Complete sign-in/MFA locally, then run
+   `laplace-local attach <config.json> --select <server-id> --confirm`.
+   Register only Laplace Local with your AI client. Preserve existing connections.
+5. Verify startup, tool discovery and a harmless authenticated read. Do not send
+   messages, connection requests or mail, change calendars, or create EMS bookings
+   as part of setup. Report failures without substituting unverified packages.
+
+Canvas needs your institution URL and download folder; verify `canvas_whoami` and
+`canvas_list_courses`. LinkedIn uses Python 3.13 and `uv sync --locked --no-dev`;
+verify `get_my_profile`. EMS needs Node 24 and Chrome/Edge; verify
+`ems_session_status` and `ems_list_templates`. Outlook needs Node and Chrome/Edge;
+verify `outlook_status` and `outlook_list_folders`. Follow each manifest's launch
+configuration rather than registering an upstream server directly with a client.
+
+Slack's source bundle requires Node 22+, Go 1.25+, locked dependencies installed
+with `npm --prefix browser ci --ignore-scripts`, Patchright Chromium installed
+with `npm --prefix browser run install-browser`, and the Go executable built as
+its README describes. Run the documented `login` command before `serve`. Use
+only the dedicated Patchright browser profile; OAuth and bot tokens are disabled.
+Select server ID `slack`, verify `channels_list`, and keep writes disabled.
+Its declared platforms are packaging targets, not authenticated acceptance claims.
+
+## Source and releases
+
+`connectors/` contains source, manifests, lockfiles, licenses and provenance.
+`catalog/local-mcp-bundles.json` records immutable versions, artifact checksums,
+sizes, download URLs and acceptance evidence. The initial Canvas, LinkedIn, EMS
+and Outlook releases are byte-for-byte mirrors of the existing Laplace releases;
+their original upstream provenance and acceptance limitations are preserved.
+Their source trees were extracted from those verified bundles, excluding installed
+`node_modules`; omitted development files were restored from the pinned upstream
+commits. Compiled files already present in the bundles are retained.
+Historical review notes are in `reviews/`; references to the Laplace monorepo
+in those records describe the original release process.
+
+Each connector retains its own license and attribution. The root MIT license
+covers the inherited Slack fork; it does not override connector licenses. In
+particular, Yale SOM EMS is first-party proprietary code with its own LICENSE.
+Third-party dependencies retain their licenses. No credentials or browser profiles
+are shipped.
+
+## Build a new candidate
+
+Use Node 24+, Python 3 and the connector's declared toolchain. Commit source changes
+first: builds use `git archive HEAD:connectors/<id>` so unrelated working files
+and local sessions are not packaged.
 
 ```sh
-npm --prefix browser ci --ignore-scripts
-npm --prefix browser run install-browser
-go build -o build/slack-mcp-server ./cmd/slack-mcp-server
-node browser/cli.mjs login --workspace https://your-team.slack.com
+npm ci --ignore-scripts
+npm run build:bundle -- canvas-session-mcp 0.1.0-laplace.2
+npm run verify
 ```
 
-On Windows, build with `go build -o build/slack-mcp-server.exe ./cmd/slack-mcp-server`. Browser system dependencies may be required on Linux (`browser/node_modules/.bin/patchright install --with-deps chromium`).
+The builder uses locked inputs and MCPB 2.1.2, validates manifests and normalizes
+archive timestamps and ordering. Canvas/EMS/Outlook install locked dependencies;
+LinkedIn and Slack are source distributions with documented local prerequisites.
+Outputs are ignored under `.artifacts/`; staging is under `.build/`. A build is a
+candidate, not release acceptance. New bytes require a new version. Update the
+catalog with the resulting SHA-256/size and actual platform evidence before
+publishing; never overwrite a release asset. Native dependencies require
+platform-specific recipes instead of a universal archive. No GitHub Actions are
+configured by this library.
 
-## Connect to Laplace Local
-
-Create a local JSON file with absolute paths:
-
-```json
-{
-  "mcpServers": {
-    "slack": {
-      "command": "node",
-      "args": ["/absolute/path/slack-mcp-server-patchright/browser/cli.mjs", "serve", "--workspace", "https://your-team.slack.com"],
-      "env": {
-        "SLACK_MCP_ENABLED_TOOLS": "channels_list,conversations_history,conversations_replies,conversations_search_messages"
-      }
-    }
-  }
-}
-```
-
-Run `laplace-local attach /absolute/path/slack.json --select slack --confirm`. Verify initialization, tool discovery, and `channels_list`. The example enables only read tools. Posting is disabled by upstream unless explicitly enabled; do not add write tools during setup.
-
-At each start, Patchright reopens the dedicated profile headlessly, reads the current workspace session, closes Chromium, and launches the Go MCP server. Credentials are passed in the child process environment and never written to a separate token file or stdout. The browser profile contains session secrets; keep it private. The default profile is workspace-specific under `~/.laplace-local/sessions/slack-patchright/`. Use `--profile-dir /absolute/dedicated/path` consistently for both login and serve to override it. Never point it at an everyday browser profile.
-
-Session expiry requires running `login` again. Changing workspace URLs creates a separate default profile. GovSlack workspace URLs are supported in code but require real-workspace acceptance testing. A locked profile, expired session, missing browser, or invalid workspace stops startup; there is no OAuth fallback. Remove any inherited OAuth token variables before launching.
-
-## Distribution and validation
-
-This is a source distribution: users install locked Node dependencies and build the Go binary locally. Do not substitute an upstream latest binary, which permits OAuth. See `LAPLACE-PROVENANCE.json` for the source revision and validation record. Upstream MIT license and authorship are preserved in `LICENSE`. Node dependencies retain their own licenses.
-
-Run `npm --prefix browser test`, `go test -skip TestIntegration ./...`, and `go build -o build/slack-mcp-server ./cmd/slack-mcp-server`. Run `RUN_PATCHRIGHT_SMOKE=1 npm --prefix browser test` for a local Chromium profile smoke test. Upstream integration tests need a real Slack session (some also require OpenAI credentials) and are excluded from the offline test command. A real Slack login and authenticated read are required before calling a platform release production-verified. The old upstream npm/DXT publishing configuration is not used by this fork.
+`npm run verify` checks every cataloged archive present in `.artifacts/`, its
+checksum, size, safe ZIP paths and manifest identity. Download existing release
+assets there to verify a fresh checkout. Missing archives are reported as errors.
+Authenticated acceptance must be recorded against each exact archive and platform;
+existing evidence does not carry over to rebuilt bytes.

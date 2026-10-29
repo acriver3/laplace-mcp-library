@@ -1,0 +1,57 @@
+{
+  "manifest_version": "0.3",
+  "name": "msoutlook-mcp",
+  "display_name": "Outlook for Laplace Local",
+  "version": "0.5.0-laplace.1",
+  "description": "Read and manage Outlook mail, calendars, contacts and directory profiles using a local browser sign-in.",
+  "author": {
+    "name": "Shayan Khaksar",
+    "url": "https://github.com/shayanline/msoutlook-mcp"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shayanline/msoutlook-mcp"
+  },
+  "license": "MIT",
+  "privacy_policies": [
+    "https://privacy.microsoft.com/privacystatement"
+  ],
+  "server": {
+    "type": "node",
+    "entry_point": "dist/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/dist/index.js"
+      ],
+      "env": {
+        "MSOUTLOOK_BROWSER": "${user_config.browser}",
+        "MSOUTLOOK_SKIP_COOKIE_IMPORT": "false"
+      }
+    }
+  },
+  "compatibility": {
+    "platforms": [
+      "win32",
+      "darwin"
+    ],
+    "runtimes": {
+      "node": ">=20"
+    }
+  },
+  "tools_generated": true,
+  "user_config": {
+    "browser": {
+      "type": "string",
+      "title": "Browser channel (chrome or msedge)",
+      "description": "Leave empty for automatic detection, or choose an installed Chrome or Edge.",
+      "default": ""
+    }
+  },
+  "_meta": {
+    "com.withlaplace.catalog": {
+      "upstream_commit": "834e3764e01aa06ddde73590a8bc71aeafab74c0",
+      "patches": []
+    }
+  }
+}
