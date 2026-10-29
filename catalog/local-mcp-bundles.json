@@ -70,7 +70,8 @@
           }
         ],
         "legacyUrl": "https://downloads.withlaplace.com/v0.1.0/bundles/canvas-session-mcp/0.1.0-laplace.1/canvas-session-mcp-0.1.0-laplace.1-universal.mcpb",
-        "url": "https://github.com/acriver3/laplace-mcp-library/releases/download/canvas-session-mcp-v0.1.0-laplace.1/canvas-session-mcp-0.1.0-laplace.1-universal.mcpb"
+        "url": "https://raw.githubusercontent.com/acriver3/laplace-mcp-library/canvas-session-mcp-v0.1.0-laplace.1/bundles/canvas-session-mcp/0.1.0-laplace.1/canvas-session-mcp-0.1.0-laplace.1-universal.mcpb",
+        "path": "bundles/canvas-session-mcp/0.1.0-laplace.1/canvas-session-mcp-0.1.0-laplace.1-universal.mcpb"
       }
     ],
     "sourceDirectory": "connectors/canvas-session-mcp",
@@ -144,7 +145,8 @@
           }
         ],
         "legacyUrl": "https://downloads.withlaplace.com/v0.1.0/bundles/linkedin-mcp-server/4.26.2-laplace.1/linkedin-mcp-server-4.26.2-laplace.1-universal.mcpb",
-        "url": "https://github.com/acriver3/laplace-mcp-library/releases/download/linkedin-mcp-server-v4.26.2-laplace.1/linkedin-mcp-server-4.26.2-laplace.1-universal.mcpb"
+        "url": "https://raw.githubusercontent.com/acriver3/laplace-mcp-library/linkedin-mcp-server-v4.26.2-laplace.1/bundles/linkedin-mcp-server/4.26.2-laplace.1/linkedin-mcp-server-4.26.2-laplace.1-universal.mcpb",
+        "path": "bundles/linkedin-mcp-server/4.26.2-laplace.1/linkedin-mcp-server-4.26.2-laplace.1-universal.mcpb"
       }
     ],
     "sourceDirectory": "connectors/linkedin-mcp-server",
@@ -213,7 +215,8 @@
           }
         ],
         "legacyUrl": "https://downloads.withlaplace.com/v0.1.0/bundles/yale-som-ems-mcp/0.1.0/yale-som-ems-mcp-0.1.0-universal.mcpb",
-        "url": "https://github.com/acriver3/laplace-mcp-library/releases/download/yale-som-ems-mcp-v0.1.0/yale-som-ems-mcp-0.1.0-universal.mcpb"
+        "url": "https://raw.githubusercontent.com/acriver3/laplace-mcp-library/yale-som-ems-mcp-v0.1.0/bundles/yale-som-ems-mcp/0.1.0/yale-som-ems-mcp-0.1.0-universal.mcpb",
+        "path": "bundles/yale-som-ems-mcp/0.1.0/yale-som-ems-mcp-0.1.0-universal.mcpb"
       }
     ],
     "sourceDirectory": "connectors/yale-som-ems-mcp",
@@ -288,7 +291,8 @@
           }
         ],
         "legacyUrl": "https://downloads.withlaplace.com/v0.1.0/bundles/msoutlook-mcp/0.5.0-laplace.1/msoutlook-mcp-0.5.0-laplace.1-universal.mcpb",
-        "url": "https://github.com/acriver3/laplace-mcp-library/releases/download/msoutlook-mcp-v0.5.0-laplace.1/msoutlook-mcp-0.5.0-laplace.1-universal.mcpb"
+        "url": "https://raw.githubusercontent.com/acriver3/laplace-mcp-library/msoutlook-mcp-v0.5.0-laplace.1/bundles/msoutlook-mcp/0.5.0-laplace.1/msoutlook-mcp-0.5.0-laplace.1-universal.mcpb",
+        "path": "bundles/msoutlook-mcp/0.5.0-laplace.1/msoutlook-mcp-0.5.0-laplace.1-universal.mcpb"
       }
     ],
     "sourceDirectory": "connectors/msoutlook-mcp",
@@ -320,10 +324,11 @@
           "darwin-arm64",
           "linux-x64"
         ],
-        "published": false,
+        "published": true,
         "candidate": true,
         "acceptance": [],
-        "url": "https://github.com/acriver3/laplace-mcp-library/releases/download/slack-mcp-server-v1.0.0-laplace.patchright.1/slack-mcp-server-1.0.0-laplace.patchright.1-universal.mcpb"
+        "url": "https://raw.githubusercontent.com/acriver3/laplace-mcp-library/slack-mcp-server-v1.0.0-laplace.patchright.1/bundles/slack-mcp-server/1.0.0-laplace.patchright.1/slack-mcp-server-1.0.0-laplace.patchright.1-universal.mcpb",
+        "path": "bundles/slack-mcp-server/1.0.0-laplace.patchright.1/slack-mcp-server-1.0.0-laplace.patchright.1-universal.mcpb"
       }
     ],
     "reviewEvidence": [

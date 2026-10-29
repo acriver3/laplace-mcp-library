@@ -24,7 +24,8 @@ for entry in entries:
         assert (ROOT / evidence).is_file(), f'Missing evidence: {evidence}'
     assert entry['artifacts'], f'{entry["id"]}: no stored MCPB'
     for artifact in entry['artifacts']:
-        path = ROOT / '.artifacts' / artifact['name']
+        path = ROOT / artifact['path']
+        assert path.resolve().is_relative_to((ROOT / 'bundles').resolve()), 'Archive must be in bundles/'
         data = path.read_bytes()
         assert len(data) == artifact['size'], f'{path.name}: wrong size'
         assert hashlib.sha256(data).hexdigest() == artifact['sha256'], f'{path.name}: wrong checksum'

@@ -6,7 +6,7 @@ under `connectors/slack-mcp-server`.
 
 Canvas, LinkedIn, Yale SOM EMS and Outlook artifacts were downloaded from the
 previous release origin and verified against the Laplace catalog's exact SHA-256
-and byte length before source extraction. The four GitHub Release mirrors retain
+and byte length before source extraction. The four repository-stored MCPB mirrors retain
 those original bytes and acceptance records. Missing development files were
 restored from the recorded immutable source commits. No upstream connector
 implementation was modified during this move.
@@ -36,3 +36,8 @@ Root build tooling preserves the environment's proxy and CA settings while
 excluding application credentials. Dependencies and browser state are not copied
 from developers' machines. Browser profiles and secrets stay outside source and
 bundle directories. Existing R2 releases remain available.
+
+Publication uses checked-in versioned MCPBs and release-note download links. The
+GitHub integration can push repository contents and create release metadata, but
+its upload credential was rejected by uploads.github.com. No release assets were
+uploaded; tagged raw repository downloads are independently checksum-verified.

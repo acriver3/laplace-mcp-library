@@ -15,7 +15,8 @@ are preserved here alongside the other connectors.
 ## Install through Laplace Local
 
 1. Find the connector in [the catalog](catalog/local-mcp-bundles.json) and download
-   its MCPB from [Releases](https://github.com/acriver3/laplace-mcp-library/releases).
+   its MCPB using the catalog download URL or the links in
+   [Releases](https://github.com/acriver3/laplace-mcp-library/releases).
    Check its exact SHA-256 and byte length against the catalog before extraction
    or execution. Release notes distinguish published bundles from candidates.
 2. Extract into a persistent, versioned local folder. Read the connector README
@@ -50,6 +51,9 @@ Its declared platforms are packaging targets, not authenticated acceptance claim
 ## Source and releases
 
 `connectors/` contains source, manifests, lockfiles, licenses and provenance.
+`bundles/<connector-id>/<version>/` stores the actual MCPB files in Git. Release
+notes link to those files at immutable version tags; they are not uploaded release
+assets. This keeps both source and bundles accessible through this repository.
 `catalog/local-mcp-bundles.json` records immutable versions, artifact checksums,
 sizes, download URLs and acceptance evidence. The initial Canvas, LinkedIn, EMS
 and Outlook releases are byte-for-byte mirrors of the existing Laplace releases;
@@ -88,13 +92,13 @@ publishing; never overwrite a release asset. Native dependencies require
 platform-specific recipes instead of a universal archive. No GitHub Actions are
 configured by this library.
 
-`npm run verify` checks every cataloged archive present in `.artifacts/`, its
-checksum, size, safe ZIP paths and manifest identity. Download existing release
-assets there to verify a fresh checkout. Missing archives are reported as errors.
+`npm run verify` checks every cataloged archive in `bundles/`, its checksum,
+size, safe ZIP paths and manifest identity. A normal Git clone includes the
+archives; missing archives are reported as errors.
 Authenticated acceptance must be recorded against each exact archive and platform;
 existing evidence does not carry over to rebuilt bytes.
 
 After pushing the reviewed source commit, maintainers can run
 `npm run publish:releases` with GitHub repository write access. This verifies every
-cataloged archive, creates missing releases without replacing assets, and downloads
-the published assets again to verify their exact bytes. Slack is a prerelease.
+cataloged archive, creates missing release notes without replacing tags, and
+downloads the tagged repository files again to verify their exact bytes. Slack is a prerelease.
