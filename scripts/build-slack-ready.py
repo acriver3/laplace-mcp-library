@@ -6,6 +6,7 @@ import os
 import pathlib
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
@@ -64,6 +65,27 @@ for target in targets:
             (runtime / node_name).write_bytes(tf.extractfile(f'{prefix}/bin/node').read())
             (runtime / 'LICENSE').write_bytes(tf.extractfile(f'{prefix}/LICENSE').read())
     (runtime / node_name).chmod(0o755)
+    licenses = stage / 'licenses/go-modules'
+    licenses.mkdir(parents=True)
+    goroot = run([go, 'env', 'GOROOT'], capture=True).decode().strip()
+    shutil.copy2(pathlib.Path(goroot) / 'LICENSE', stage / 'licenses/Go-LICENSE')
+    module_data = run([go, 'list', '-m', '-json', 'all'], cwd=stage, capture=True).decode()
+    decoder = json.JSONDecoder()
+    module_records = []
+    while module_data.strip():
+        module, end = decoder.raw_decode(module_data.lstrip())
+        module_data = module_data.lstrip()[end:]
+        if module.get('Main') or not module.get('Dir'):
+            continue
+        directory = pathlib.Path(module['Dir'])
+        names = [f for f in directory.iterdir() if f.is_file() and f.name.upper().startswith(('LICENSE', 'COPYING', 'NOTICE'))]
+        assert names, f'Missing license for Go dependency {module["Path"]}'
+        destination = licenses / (module['Path'].replace('/', '_') + '@' + module.get('Version', 'unknown'))
+        destination.mkdir()
+        for name in names:
+            shutil.copy2(name, destination / name.name)
+        module_records.append({'module': module['Path'], 'version': module.get('Version'), 'notices': [f.name for f in names]})
+    (licenses / 'index.json').write_text(json.dumps(module_records, indent=2) + '\n')
     (stage / 'build').mkdir()
     binary = stage / 'build' / ('slack-mcp-server.exe' if windows else 'slack-mcp-server')
     run([go, 'build', '-trimpath', '-buildvcs=false', '-ldflags=-s -w', '-o', str(binary), './cmd/slack-mcp-server'], cwd=stage, extra={'CGO_ENABLED':'0', 'GOOS':config['goos'], 'GOARCH':config['goarch']})
@@ -84,8 +106,21 @@ for target in targets:
     provenance = {'id':'slack-mcp-server', 'version':version, 'libraryCommit':commit, 'platform':target, 'nodeArchive':config['archive'], 'nodeSha256':config['sha256'], 'goVersion':LOCK['goVersion'], 'cgoEnabled':False, 'authenticationAcceptance':'not performed'}
     (stage / 'LAPLACE-LIBRARY-PROVENANCE.json').write_text(json.dumps(provenance, indent=2) + '\n')
     run(['node', str(cli), 'validate', str(stage / 'manifest.json')])
-    run(['node', str(cli), 'pack', str(stage), str(artifact)])
-    archive.normalize(artifact, stage)
+    # MCPB is a ZIP archive. Write it once with deterministic paths, modes and
+    # timestamps, retaining native runtimes and lockfiles without CLI exclusions.
+    with zipfile.ZipFile(artifact, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=6) as bundle:
+        for path in sorted(stage.rglob('*')):
+            name = path.relative_to(stage).as_posix()
+            if '.bin' in path.relative_to(stage).parts or not archive.allowed(name):
+                continue
+            if path.is_dir():
+                continue
+            assert path.is_file() and not path.is_symlink(), f'Unsupported bundle file: {name}'
+            info = zipfile.ZipInfo(name, (2020, 1, 1, 0, 0, 0))
+            info.create_system = 3
+            info.external_attr = (stat.S_IFREG | (0o755 if path.stat().st_mode & 0o111 else 0o644)) << 16
+            info.compress_type = zipfile.ZIP_DEFLATED
+            bundle.writestr(info, path.read_bytes(), compresslevel=6)
     files = archive.zip_entries(artifact.read_bytes())
     for name in [f'runtime/{node_name}', 'runtime/LICENSE', str(binary.relative_to(stage)), 'browser/node_modules/patchright/package.json', 'browser/node_modules/patchright-core/package.json', 'browser/package-lock.json']:
         assert name in files, f'Missing bundled runtime: {name}'

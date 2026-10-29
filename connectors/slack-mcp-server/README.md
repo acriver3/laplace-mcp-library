@@ -15,8 +15,8 @@ Browser sessions stay in a dedicated profile outside the bundle.
 | macOS Apple Silicon | `darwin-arm64.mcpb` | Cross-compiled; native login acceptance pending |
 | Linux x64 | `linux-x64.mcpb` | Local runtime checks; real Slack login acceptance pending |
 
-Use a currently supported Windows 10/11, macOS, or Ubuntu/Debian desktop compatible
-with Node 24 and the bundled Patchright version. Linux needs Chromium's OS shared
+Use Windows 10/11, macOS 14+, Ubuntu 22.04/24.04/26.04, or Debian 12/13
+with a graphical desktop. Linux needs Chromium's OS shared
 libraries (these are not application dependencies and are not bundled). ARM64
 Windows and Linux packages are not provided. These are package targets, not claims
 that all native platforms have passed authenticated Slack testing. Check the
