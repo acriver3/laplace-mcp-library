@@ -2,8 +2,8 @@
   "manifest_version": "0.3",
   "name": "slack-mcp-server",
   "display_name": "Slack for Laplace Local",
-  "version": "1.0.0-laplace.patchright.1",
-  "description": "Slack MCP using dedicated Patchright browser sign-in. Source bundle: install Node dependencies and build Go before attaching.",
+  "version": "1.1.0-laplace.1",
+  "description": "Precompiled Slack MCP with bundled Node and dependencies. First login downloads Chromium; no compiler or npm needed.",
   "author": {
     "name": "Laplace"
   },
@@ -13,10 +13,10 @@
   },
   "license": "MIT",
   "server": {
-    "type": "node",
-    "entry_point": "browser/cli.mjs",
+    "type": "binary",
+    "entry_point": "runtime/node",
     "mcp_config": {
-      "command": "node",
+      "command": "${__dirname}/runtime/node",
       "args": [
         "${__dirname}/browser/cli.mjs",
         "serve",
@@ -25,6 +25,11 @@
       ],
       "env": {
         "SLACK_MCP_ENABLED_TOOLS": "channels_list,conversations_history,conversations_replies,conversations_search_messages"
+      },
+      "platform_overrides": {
+        "win32": {
+          "command": "${__dirname}/runtime/node.exe"
+        }
       }
     }
   },
@@ -33,10 +38,7 @@
       "win32",
       "darwin",
       "linux"
-    ],
-    "runtimes": {
-      "node": ">=22"
-    }
+    ]
   },
   "user_config": {
     "workspace": {

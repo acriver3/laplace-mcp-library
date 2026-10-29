@@ -22,7 +22,12 @@ for entry in entries:
         candidate = any(a.get('candidate', False) for a in entry['artifacts'])
         with tempfile.NamedTemporaryFile(mode='w', suffix='.md') as notes:
             notes.write(f'# {entry["name"]} {entry["version"]}\n\n')
-            notes.write('Source MCPB candidate. Install the documented Node dependencies and Patchright browser, and compile Go locally. Real Slack sign-in and authenticated platform acceptance remain unverified.\n\n' if candidate else 'Byte-for-byte mirror of the existing Laplace MCPB release. Original provenance and acceptance limitations are retained in the library catalog and review records.\n\n')
+            if entry['recipe'] == 'slack-ready':
+                notes.write('Precompiled Slack MCPBs include the Go server, Node runtime and locked dependencies. No Go, npm or local compilation is needed. First login downloads Chromium and opens Slack sign-in. Real Slack authentication and native Windows/macOS acceptance remain pending. Linux runtime and local-browser checks are recorded in the review. Choose the artifact for your operating system and CPU.\n\n')
+            elif candidate:
+                notes.write('Source MCPB candidate; follow its documented local build prerequisites. Authenticated platform acceptance remains pending.\n\n')
+            else:
+                notes.write('Byte-for-byte mirror of the existing Laplace MCPB release. Original provenance and acceptance limitations are retained in the catalog and review records.\n\n')
             notes.write(f'Setup: https://github.com/{REPO}/blob/{commit}/README.md\n\n')
             for a in entry['artifacts']:
                 notes.write(f'- [{a["name"]}]({a["url"]}): {a["size"]} bytes; SHA-256 `{a["sha256"]}`\n')

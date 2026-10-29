@@ -1,0 +1,40 @@
+{
+  "id": "slack-mcp-server",
+  "name": "Slack",
+  "version": "1.0.0-laplace.patchright.1",
+  "recipe": "slack-source",
+  "sourceDirectory": "connectors/slack-mcp-server",
+  "repository": "https://github.com/korotovsky/slack-mcp-server",
+  "upstreamCommit": "b88c0de3f706f4f07337c9eda7133c736d1c9524",
+  "license": "MIT",
+  "prerequisites": [
+    "Node.js 22+",
+    "Go 1.25+",
+    "Patchright Chromium",
+    "Laplace Local"
+  ],
+  "artifacts": [
+    {
+      "name": "slack-mcp-server-1.0.0-laplace.patchright.1-universal.mcpb",
+      "sha256": "29d9dbb8c4feb9265f703fa2eba48646774b08ca18f87b0e5cb8bbb26a8b6a78",
+      "size": 138750,
+      "platforms": [
+        "win32-x64",
+        "darwin-x64",
+        "darwin-arm64",
+        "linux-x64"
+      ],
+      "published": true,
+      "candidate": true,
+      "acceptance": [],
+      "url": "https://raw.githubusercontent.com/acriver3/laplace-mcp-library/slack-mcp-server-v1.0.0-laplace.patchright.1/bundles/slack-mcp-server/1.0.0-laplace.patchright.1/slack-mcp-server-1.0.0-laplace.patchright.1-universal.mcpb",
+      "path": "bundles/slack-mcp-server/1.0.0-laplace.patchright.1/slack-mcp-server-1.0.0-laplace.patchright.1-universal.mcpb"
+    }
+  ],
+  "reviewEvidence": [
+    "connectors/slack-mcp-server/LAPLACE-PROVENANCE.json"
+  ],
+  "reviewNotes": [
+    "Source MCPB candidate; real Slack sign-in and authenticated read have not been verified."
+  ]
+}

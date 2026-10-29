@@ -4,13 +4,29 @@ The home for Laplace-maintained local MCP source code and MCPB bundles.
 Previously named `slack-mcp-server-patchright`; the Slack fork and its Git history
 are preserved here alongside the other connectors.
 
-| MCP | Source and setup | Distribution |
-| --- | --- | --- |
-| Canvas | [Connector README](connectors/canvas-session-mcp/README.md) | Versioned MCPB |
-| LinkedIn | [Connector README](connectors/linkedin-mcp-server/README.md) | Versioned MCPB |
-| Yale SOM EMS | [Connector README](connectors/yale-som-ems-mcp/README.md) | Versioned MCPB |
-| Outlook | [Connector README](connectors/msoutlook-mcp/README.md) | Versioned MCPB |
-| Slack | [Patchright README](connectors/slack-mcp-server/README.md) | Source MCPB candidate; local build required |
+| MCP | Windows x64 | macOS Intel | macOS Apple Silicon | Linux x64 | What the MCPB includes |
+| --- | --- | --- | --- | --- | --- |
+| [Canvas](connectors/canvas-session-mcp/README.md) | Supported | Supported | Supported | Not verified | JavaScript server and dependencies; Node and Chrome/Edge required |
+| [LinkedIn](connectors/linkedin-mcp-server/README.md) | Supported | Supported | Supported | Not verified | Python source and lockfile; Python 3.13, uv and browser setup required |
+| [Yale SOM EMS](connectors/yale-som-ems-mcp/README.md) | Supported | Not verified | Supported | Not verified | Compiled server and dependencies; Node 24 and Chrome/Edge required |
+| [Outlook](connectors/msoutlook-mcp/README.md) | Supported | Supported | Supported | Not verified | Compiled server and dependencies; Node and Chrome/Edge required |
+| [Slack](connectors/slack-mcp-server/README.md) | Precompiled* | Precompiled* | Precompiled* | Precompiled* | Go server, Node runtime and dependencies; no local build |
+
+“Supported” lists the existing release's declared OS/CPU targets. Acceptance
+records differ: Canvas/LinkedIn have user-confirmed Windows/macOS acceptance;
+EMS has Windows x64/macOS Apple Silicon acceptance; Outlook has release approval
+but no recorded authenticated native-platform test. See the catalog and `reviews/`
+for exact evidence. “Not verified” means no supported release is declared for that
+platform; a universal filename alone does not establish support. No Windows ARM64
+or Linux ARM64 bundles are currently provided.
+
+*Slack's new platform packages are precompiled previews. Linux executable startup
+and a local browser fixture are checked; real Slack sign-in remains unverified,
+and Windows/macOS packages have not been executed on native machines. Slack needs
+Windows 10/11, macOS 14+, Ubuntu 22.04/24.04/26.04 or Debian 12/13. Linux also needs
+Chromium's OS shared libraries. A graphical desktop and internet access are
+required for first sign-in. Download the suffix matching your OS and CPU from
+[the catalog](catalog/local-mcp-bundles.json) or the [Slack 1.1.0-laplace.1 release](https://github.com/acriver3/laplace-mcp-library/releases/tag/slack-mcp-server-v1.1.0-laplace.1).
 
 ## Install through Laplace Local
 
@@ -40,13 +56,15 @@ verify `get_my_profile`. EMS needs Node 24 and Chrome/Edge; verify
 verify `outlook_status` and `outlook_list_folders`. Follow each manifest's launch
 configuration rather than registering an upstream server directly with a client.
 
-Slack's source bundle requires Node 22+, Go 1.25+, locked dependencies installed
-with `npm --prefix browser ci --ignore-scripts`, Patchright Chromium installed
-with `npm --prefix browser run install-browser`, and the Go executable built as
-its README describes. Run the documented `login` command before `serve`. Use
-only the dedicated Patchright browser profile; OAuth and bot tokens are disabled.
-Select server ID `slack`, verify `channels_list`, and keep writes disabled.
-Its declared platforms are packaging targets, not authenticated acceptance claims.
+Slack now includes its Node runtime, Go server and Node dependencies. Extract the
+matching platform MCPB and run `./slack login --workspace https://your-team.slack.com`
+on macOS/Linux or `.\slack.cmd login --workspace https://your-team.slack.com` on
+Windows. First login automatically downloads the matching Chromium browser and
+opens Slack sign-in/MFA; no Go, npm or compilation step is needed. Then use the
+manifest to attach through Laplace Local. The bundle is not notarized; normal OS
+security prompts may apply. See the connector README for executable permissions
+and Linux requirements. Only dedicated Patchright browser sign-in is supported;
+OAuth and bot tokens remain disabled. Verify `channels_list` with writes disabled.
 
 ## Source and releases
 
@@ -84,7 +102,12 @@ npm run verify
 
 The builder uses locked inputs and MCPB 2.1.2, validates manifests and normalizes
 archive timestamps and ordering. Canvas/EMS/Outlook install locked dependencies;
-LinkedIn and Slack are source distributions with documented local prerequisites.
+LinkedIn remains a source distribution with documented local prerequisites.
+Slack uses `npm run build:slack -- <new-version>` with the pinned Go toolchain
+(`GO_BINARY` can select its executable) and checksum-verified Node archives.
+That command builds all four platform packages from committed source, retaining
+runtime licenses and dependency notices. `scripts/slack-runtime-lock.json` records
+exact runtime versions and checksums.
 Outputs are ignored under `.artifacts/`; staging is under `.build/`. A build is a
 candidate, not release acceptance. New bytes require a new version. Update the
 catalog with the resulting SHA-256/size and actual platform evidence before
@@ -101,4 +124,4 @@ existing evidence does not carry over to rebuilt bytes.
 After pushing the reviewed source commit, maintainers can run
 `npm run publish:releases` with GitHub repository write access. This verifies every
 cataloged archive, creates missing release notes without replacing tags, and
-downloads the tagged repository files again to verify their exact bytes. Slack is a prerelease.
+downloads the tagged repository files again to verify their exact bytes. Slack remains a prerelease until authenticated native-platform acceptance is recorded.
