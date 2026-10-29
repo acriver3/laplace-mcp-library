@@ -6,7 +6,8 @@
   "scripts": {
     "build:bundle": "node scripts/build-bundle.mjs",
     "verify": "python3 scripts/verify.py",
-    "publish:releases": "python3 scripts/publish-releases.py"
+    "publish:releases": "python3 scripts/publish-releases.py",
+    "build:slack": "python3 scripts/build-slack-ready.py"
   },
   "devDependencies": {
     "@anthropic-ai/mcpb": "2.1.2"

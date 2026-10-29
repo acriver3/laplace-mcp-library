@@ -1,48 +1,88 @@
 # Slack MCP — Laplace Patchright edition
 
-A browser-session-only fork of [korotovsky/slack-mcp-server](https://github.com/korotovsky/slack-mcp-server), based on commit `b88c0de3f706f4f07337c9eda7133c736d1c9524`.
+Precompiled platform-specific MCPBs include the Slack Go server, Node 24 runtime,
+and locked Patchright dependencies. No Go installation, npm, or local build is
+needed. The first login downloads the matching Chromium browser into your user
+cache. Internet access and a graphical desktop are required for sign-in/MFA.
+Browser sessions stay in a dedicated profile outside the bundle.
 
-Slack sign-in uses the official Node.js Patchright package with a dedicated Chromium profile. Complete sign-in and MFA yourself. OAuth, bot tokens, manual token entry, and importing your normal browser profile are not supported connection options. Existing MCP tools still call Slack APIs using the browser session; this is not a browser-driven implementation of every Slack operation.
+## Choose a bundle
 
-## Setup
+| Operating system | Bundle suffix | Verification |
+| --- | --- | --- |
+| Windows x64 | `win32-x64.mcpb` | Cross-compiled; native login acceptance pending |
+| macOS Intel | `darwin-x64.mcpb` | Cross-compiled; native login acceptance pending |
+| macOS Apple Silicon | `darwin-arm64.mcpb` | Cross-compiled; native login acceptance pending |
+| Linux x64 | `linux-x64.mcpb` | Local runtime checks; real Slack login acceptance pending |
 
-Requires Node.js 22+, Go 1.25+ for building, and a desktop for initial login. These commands work from the extracted source folder:
+Use a currently supported Windows 10/11, macOS, or Ubuntu/Debian desktop compatible
+with Node 24 and the bundled Patchright version. Linux needs Chromium's OS shared
+libraries (these are not application dependencies and are not bundled). ARM64
+Windows and Linux packages are not provided. These are package targets, not claims
+that all native platforms have passed authenticated Slack testing. Check the
+library catalog and release notes for the exact artifact verification record.
 
-```sh
-npm --prefix browser ci --ignore-scripts
-npm --prefix browser run install-browser
-go build -o build/slack-mcp-server ./cmd/slack-mcp-server
-node browser/cli.mjs login --workspace https://your-team.slack.com
+Download from the library catalog, check SHA-256 and size, then extract the MCPB
+(a ZIP archive) into a persistent directory. Use an extractor that preserves Unix
+executable permissions on macOS/Linux. If yours does not, run
+`chmod +x slack runtime/node build/slack-mcp-server` in the extracted folder.
+OS security prompts may apply to downloaded executables; packages are not notarized.
+
+## Sign in
+
+Windows (PowerShell, from the extracted folder):
+
+```powershell
+.\slack.cmd login --workspace https://your-team.slack.com
 ```
 
-On Windows, build with `go build -o build/slack-mcp-server.exe ./cmd/slack-mcp-server`. Browser system dependencies may be required on Linux (`browser/node_modules/.bin/patchright install --with-deps chromium`).
+macOS/Linux:
+
+```sh
+./slack login --workspace https://your-team.slack.com
+```
+
+The launcher downloads Chromium if missing, opens a dedicated profile, and lets
+you complete Slack sign-in and MFA. No compiler or package-manager step is needed.
+OAuth, bot tokens, manual token entry and importing your everyday browser profile
+are not supported. The Go server still uses Slack APIs through this browser session.
 
 ## Connect to Laplace Local
 
-Create a local JSON file with absolute paths:
+Use the bundle's `manifest.json` to create a local JSON `mcpServers` entry named
+`slack`. Resolve `${__dirname}` to the absolute extracted directory and
+`${user_config.workspace}` to your Slack workspace HTTPS URL. The command is the
+bundled `runtime/node.exe` on Windows or `runtime/node` on macOS/Linux, with args
+pointing to `browser/cli.mjs`, `serve`, `--workspace`, and your workspace URL.
+Keep the manifest's read-only `SLACK_MCP_ENABLED_TOOLS` setting. Then run:
 
-```json
-{
-  "mcpServers": {
-    "slack": {
-      "command": "node",
-      "args": ["/absolute/path/slack-mcp-server-patchright/browser/cli.mjs", "serve", "--workspace", "https://your-team.slack.com"],
-      "env": {
-        "SLACK_MCP_ENABLED_TOOLS": "channels_list,conversations_history,conversations_replies,conversations_search_messages"
-      }
-    }
-  }
-}
+```sh
+laplace-local attach /absolute/path/slack.json --select slack --confirm
 ```
 
-Run `laplace-local attach /absolute/path/slack.json --select slack --confirm`. Verify initialization, tool discovery, and `channels_list`. The example enables only read tools. Posting is disabled by upstream unless explicitly enabled; do not add write tools during setup.
+Verify MCP initialization, tool discovery and `channels_list`. Do not post messages
+or enable write tools during setup. Starting `serve` does not trigger a download or
+open a login window; run `login` first. Only Laplace Local is registered in your AI
+client. Existing connections should be reused.
 
-At each start, Patchright reopens the dedicated profile headlessly, reads the current workspace session, closes Chromium, and launches the Go MCP server. Credentials are passed in the child process environment and never written to a separate token file or stdout. The browser profile contains session secrets; keep it private. The default profile is workspace-specific under `~/.laplace-local/sessions/slack-patchright/`. Use `--profile-dir /absolute/dedicated/path` consistently for both login and serve to override it. Never point it at an everyday browser profile.
+The default dedicated profile is workspace-specific under
+`~/.laplace-local/sessions/slack-patchright/`. Use `--profile-dir` consistently for
+both login and serve if overriding it. Session expiry requires running `login`
+again. Profiles contain secrets and must not be copied into the bundle or Git.
+Credentials go only to the child server environment, not a separate token file.
 
-Session expiry requires running `login` again. Changing workspace URLs creates a separate default profile. GovSlack workspace URLs are supported in code but require real-workspace acceptance testing. A locked profile, expired session, missing browser, or invalid workspace stops startup; there is no OAuth fallback. Remove any inherited OAuth token variables before launching.
+## Source development
 
-## Distribution and validation
+This connector derives from `korotovsky/slack-mcp-server` commit
+`b88c0de3f706f4f07337c9eda7133c736d1c9524`. Upstream MIT authorship is retained;
+Node and Patchright dependencies retain their licenses. Original provenance is in
+`LAPLACE-PROVENANCE.json`; each binary bundle adds its library commit, toolchain,
+runtime checksum and target in `LAPLACE-LIBRARY-PROVENANCE.json`.
 
-This is a source distribution: users install locked Node dependencies and build the Go binary locally. Do not substitute an upstream latest binary, which permits OAuth. See `LAPLACE-PROVENANCE.json` for the source revision and validation record. Upstream MIT license and authorship are preserved in `LICENSE`. Node dependencies retain their own licenses.
-
-Run `npm --prefix browser test`, `go test -skip TestIntegration ./...`, and `go build -o build/slack-mcp-server ./cmd/slack-mcp-server`. Run `RUN_PATCHRIGHT_SMOKE=1 npm --prefix browser test` for a local Chromium profile smoke test. Upstream integration tests need a real Slack session (some also require OpenAI credentials) and are excluded from the offline test command. A real Slack login and authenticated read are required before calling a platform release production-verified. The old upstream npm/DXT publishing configuration is not used by this fork.
+Developers can install `browser` dependencies with `npm ci --ignore-scripts`, run
+`npm --prefix browser test`, and use Go to run `go test -skip TestIntegration ./...`.
+The library's `npm run build:slack -- <new-version>` builds release bundles from
+committed source with the pinned Go toolchain and checksum-verified Node runtimes.
+An optional `RUN_PATCHRIGHT_SMOKE=1 npm --prefix browser test` runs a local browser
+fixture. It does not establish real Slack authentication. Old source-only releases
+remain available for reproducibility; use the new platform-specific bundle for setup.

@@ -12,6 +12,7 @@ assert(/^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/.test(version ?? ''), 'Supply an exp
 const catalog = JSON.parse(readFileSync(join(root, 'catalog/local-mcp-bundles.json')));
 const entry = catalog.find(item => item.id === id);
 assert(entry, 'Unknown connector');
+assert(id !== 'slack-mcp-server', 'Use npm run build:slack -- <new-version> for precompiled Slack bundles');
 assert(version !== entry.version, 'Use a new version; published or recorded versions are immutable');
 const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => /^(PATH|Path|HOME|USERPROFILE|SystemRoot|WINDIR|COMSPEC|TEMP|TMP|TMPDIR|LANG|LC_ALL|HTTP_PROXY|HTTPS_PROXY|ALL_PROXY|NO_PROXY|http_proxy|https_proxy|all_proxy|no_proxy|NODE_EXTRA_CA_CERTS|SSL_CERT_FILE|SSL_CERT_DIR)$/.test(key)));
 function run(command, args, cwd = root, options = {}) {
