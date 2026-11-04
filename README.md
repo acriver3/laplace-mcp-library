@@ -1,6 +1,7 @@
 # Laplace MCP Library
 
 The home for Laplace-maintained local MCP source code and MCPB bundles.
+The desktop client and browser extension live in [Laplace Desktop](https://github.com/acriver3/laplace-desktop).
 Previously named `slack-mcp-server-patchright`; the Slack fork and its Git history
 are preserved here alongside the other connectors.
 
