@@ -1,0 +1,71 @@
+{
+  "checkedAt": "2026-11-05T04:21:11.564Z",
+  "pages": [
+    {
+      "id": "canvas-session-mcp",
+      "title": "Set up Canvas [Background Browser] with Laplace",
+      "status": 200,
+      "finalUrl": "https://connect.withlaplace.com/local-mcp/setup/canvas-session-mcp"
+    },
+    {
+      "id": "linkedin-mcp-server",
+      "title": "Set up LinkedIn [Background Browser] with Laplace",
+      "status": 200,
+      "finalUrl": "https://connect.withlaplace.com/local-mcp/setup/linkedin-mcp-server"
+    },
+    {
+      "id": "yale-som-ems-mcp",
+      "title": "Set up Yale SOM EMS [Background Browser] with Laplace",
+      "status": 200,
+      "finalUrl": "https://connect.withlaplace.com/local-mcp/setup/yale-som-ems-mcp"
+    },
+    {
+      "id": "msoutlook-mcp",
+      "title": "Set up Outlook [Tethered] with Laplace",
+      "status": 200,
+      "finalUrl": "https://connect.withlaplace.com/local-mcp/setup/msoutlook-mcp"
+    },
+    {
+      "id": "slack-mcp-server",
+      "title": "Set up Slack [Tethered] with Laplace",
+      "status": 200,
+      "finalUrl": "https://connect.withlaplace.com/local-mcp/setup/slack-mcp-server"
+    },
+    {
+      "id": "ycombinator-demo",
+      "title": "Set up Y Combinator \u00b7 Demo Only with Laplace",
+      "status": 200,
+      "finalUrl": "https://connect.withlaplace.com/local-mcp/setup/ycombinator-demo"
+    }
+  ],
+  "cliManifest": {
+    "sha256": "15746a00f4e4d9402cf66a6e6e86f515dcdc4985905ca0a4c5a972d1e66f49cf",
+    "status": 200
+  },
+  "unauthenticated": true,
+  "javascriptExecuted": false,
+  "laplaceRevision": "02e8cdb71b860fa62cefa8717499c2b34e74ad96",
+  "deployments": {
+    "connect": {
+      "buildId": "e49714b8-c692-4a14-9cc9-2c90b73d9be0",
+      "workerVersion": "87f65304-21c7-4a06-97a5-dcba0a3d3a05",
+      "result": "success",
+      "tetheredCatalogEnabled": true
+    },
+    "marketing": {
+      "buildId": "14e7b435-9fd5-4ed2-bb1b-a231a67ebca3",
+      "result": "success"
+    }
+  },
+  "artifactRelease": "https://github.com/acriver3/laplace-mcp-library/releases/tag/browser-runtime-v0.4.1-macos.1",
+  "desktopRelease": "https://github.com/acriver3/laplace-desktop/releases/tag/desktop-macos-v0.1.22",
+  "acceptedPlatforms": [
+    "darwin-arm64"
+  ],
+  "activationCorrection": {
+    "scope": "Release configuration reconciliation only; accepted client/runtime artifact bytes unchanged.",
+    "localValidation": "pnpm verify:local --base 59b0b6a8ef3e9a5ca4bf19da543e0cbcae8110d7 --build passed",
+    "logSha256": "907c779d6759d91232a7c94bc7818a1b10ce4b21ac4dbf31708b1047c7942dd9"
+  },
+  "downloadOrigin": "https://connect.withlaplace.com/api/local-mcp/releases/"
+}
