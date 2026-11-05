@@ -7,7 +7,7 @@ The runtime has no Electron dependency. `BrowserApprovals` receives a host and c
 ## Compatibility
 
 - Native discovery protocol: 1, existing extension ID and native host name unchanged.
-- Extension: 0.5.0. Existing Slack/YC scopes and consent revisions are unchanged.
+- Extension: 0.6.0. Existing Slack/YC scopes and consent revisions are unchanged.
 - Chunked transfer: optional, advertised per invocation through `resultLimit`. The new extension uses the previous JSON path with older relays. Old extensions continue to handle the existing small Slack/YC operations.
 - Public setup URLs are independent of immutable historical MCPB documentation.
 
@@ -27,11 +27,13 @@ The candidate Outlook adapter retains all original tool registrations and opts a
 
 ## Release gates still outstanding
 
-- LinkedIn extension adapter, complete Slack tool parity, and real Outlook browser acceptance.
+- Packaged Desktop and CLI acceptance. Candidate macOS ARM64 live reads passed for Outlook status/folders and Slack identity/channels; see `evidence/2026-11-05-darwin-arm64-live-reads.json`. This records the exact connector artifacts and approval-page source override, not a blanket release acceptance. LinkedIn keeps its original background-browser implementation.
 - Final standalone CLI and Desktop migration/release integration.
-- Managed migration with fresh consent, unchanged IDs and permissions, recovery and explicit imported-config migration.
+- Real installation migration acceptance. Fixture tests exercise staged artifacts, fresh consent, unchanged IDs/permissions, cancellation, interrupted migration, duplicate prevention, explicit imported-config migration and recovery.
 - Common immutable native/connector release artifacts and checksums for every supported platform.
-- Real signed-in reads and designated-account write acceptance. Current tests cover fixtures, not live provider accounts.
+- Designated-account write acceptance. Writes have only been exercised against fixtures; the live acceptance checks were read-only.
 - Physical Windows/Linux native registration, upgrades and uninstall checks. Windows registration tests use a registry stub; macOS/Linux path behavior is tested with temporary homes.
 
 Keep catalog selection and new execution disabled until these gates pass. Existing MCPB releases retain their versions and dedicated/background browser behavior.
+
+The local builder emits `browser-runtime-manifest.json` with the target platform, source revision, compatibility versions and checksums of every packaged connector, native entry and extension file. CLI packaging rejects a platform mismatch or changed artifact. Native Windows launchers must be built on Windows. Do not activate `LAPLACE_TETHERED_BROWSER_V1` or the web `NEXT_PUBLIC_LAPLACE_TETHERED_BROWSER_V1` flag for release until the remaining gates pass.
