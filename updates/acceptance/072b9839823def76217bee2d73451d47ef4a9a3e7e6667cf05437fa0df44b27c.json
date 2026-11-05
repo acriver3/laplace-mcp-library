@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "target": "win32-x64",
+  "distribution": "tethered",
+  "commit": "65d6193dad787d9231ec98b45f504cb8a9be1b0f",
+  "artifactSha256": "a01bcfcee51f3677a563aef9b7502dbebf8464f64fc16436d303763aa60b53c3",
+  "reviewer": "Laplace release owner (explicit acceptance in implementation chat)",
+  "completedAt": "2026-11-05T22:29:00.554Z",
+  "result": "accepted",
+  "localValidation": "passed",
+  "userAcceptance": {
+    "statement": "Please keep going: you have my acceptance for the windows and mac acceptance and do not need anything else, please fix any issues, and merge the three PRs once everything passes. Then publish the qualified releases and enable the rollout.",
+    "acceptedAt": "2026-11-05T22:29:00.554Z",
+    "nativeResults": "not-attested"
+  }
+}
