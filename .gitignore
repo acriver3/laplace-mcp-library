@@ -9,3 +9,4 @@ dist/
 build/
 .venv/
 .pytest_cache/
+dist-tethered/

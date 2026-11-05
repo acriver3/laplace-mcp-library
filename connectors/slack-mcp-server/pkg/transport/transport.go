@@ -335,6 +335,12 @@ func detectBrowserFromUserAgent(userAgent string) utls.ClientHelloID {
 
 // ProvideHTTPClient creates an HTTP client with optional uTLS support
 func ProvideHTTPClient(cookies []*http.Cookie, logger *zap.Logger) *http.Client {
+	if os.Getenv("LAPLACE_TETHERED_BROWSER_V1") == "true" {
+		return &http.Client{Transport: &BrowserTransport{}, Timeout: 120 * time.Second,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return fmt.Errorf("browser transport redirects are not allowed")
+			}}
+	}
 	if os.Getenv("SLACK_MCP_PROXY") != "" && os.Getenv("SLACK_MCP_CUSTOM_TLS") != "" {
 		logger.Fatal("SLACK_MCP_PROXY and SLACK_MCP_CUSTOM_TLS cannot be used together",
 			zap.String("reason", "Custom TLS fingerprinting has no effect when using a proxy, as the target server sees the proxy's TLS handshake"))

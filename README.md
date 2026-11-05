@@ -7,9 +7,9 @@ are preserved here alongside the other connectors.
 
 | MCP | Windows x64 | macOS Intel | macOS Apple Silicon | Linux x64 | What the MCPB includes |
 | --- | --- | --- | --- | --- | --- |
-| [Canvas](connectors/canvas-session-mcp/README.md) | Supported | Supported | Supported | Not verified | JavaScript server and dependencies; Node and Chrome/Edge required |
-| [LinkedIn](connectors/linkedin-mcp-server/README.md) | Supported | Supported | Supported | Not verified | Python source and lockfile; Python 3.13, uv and browser setup required |
-| [Yale SOM EMS](connectors/yale-som-ems-mcp/README.md) | Supported | Not verified | Supported | Not verified | Compiled server and dependencies; Node 24 and Chrome/Edge required |
+| [Canvas [Background Browser]](connectors/canvas-session-mcp/README.md) | Supported | Supported | Supported | Not verified | JavaScript server and dependencies; Node and Chrome/Edge required |
+| [LinkedIn [Background Browser]](connectors/linkedin-mcp-server/README.md) | Supported | Supported | Supported | Not verified | Python source and lockfile; Python 3.13, uv and browser setup required |
+| [Yale SOM EMS [Background Browser]](connectors/yale-som-ems-mcp/README.md) | Supported | Not verified | Supported | Not verified | Compiled server and dependencies; Node 24 and Chrome/Edge required |
 | [Outlook](connectors/msoutlook-mcp/README.md) | Supported | Supported | Supported | Not verified | Compiled server and dependencies; Node and Chrome/Edge required |
 | [Slack](connectors/slack-mcp-server/README.md) | Supported | Supported | Supported | Supported | Go server, Node runtime and dependencies; no local build |
 
@@ -127,3 +127,9 @@ After pushing the reviewed source commit, maintainers can run
 `npm run publish:releases` with GitHub repository write access. This verifies every
 cataloged archive, creates missing release notes without replacing tags, and
 downloads the tagged repository files again to verify their exact bytes. Slack 1.1.0-laplace.1 is a regular release; its approval and verification evidence are recorded separately in the catalog.
+
+## Connector setup links
+
+Use `https://connect.laplaceop.com/local-mcp/setup/<catalog-id>` for the current public setup instructions. For example: “Please set up LinkedIn [Background Browser] with Laplace using these instructions: https://connect.laplaceop.com/local-mcp/setup/linkedin-mcp-server”. The web and Desktop catalogs use this same one-sentence format. Existing connector READMEs and bundle manifests describe their versioned implementations.
+
+The browser-runtime candidate contains Outlook and full Slack adapters, the shared extension and native installer, and Desktop/CLI approval and migration primitives. See [runtime release gates](browser-runtime/README.md) and its artifact-specific evidence before activation. LinkedIn retains its original implementation.

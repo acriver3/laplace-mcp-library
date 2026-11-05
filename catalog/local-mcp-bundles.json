@@ -1,7 +1,7 @@
 [
   {
     "id": "canvas-session-mcp",
-    "name": "Canvas",
+    "name": "Canvas [Background Browser]",
     "description": "Read courses, assignments, announcements and grades using your Canvas browser login.",
     "capabilities": [
       "Read Canvas course data",
@@ -75,11 +75,13 @@
       }
     ],
     "sourceDirectory": "connectors/canvas-session-mcp",
-    "sourceArchiveSha256": "221eb61d65673adb71d61db1d6061e290bfdf43ead54a407830a0b43b7e17bad"
+    "sourceArchiveSha256": "221eb61d65673adb71d61db1d6061e290bfdf43ead54a407830a0b43b7e17bad",
+    "setupUrl": "https://connect.laplaceop.com/local-mcp/setup/canvas-session-mcp",
+    "browserMode": "background-browser"
   },
   {
     "id": "linkedin-mcp-server",
-    "name": "LinkedIn",
+    "name": "LinkedIn [Background Browser]",
     "description": "Read profiles, companies, jobs and conversations using a dedicated local LinkedIn browser session.",
     "capabilities": [
       "Read profiles, companies and jobs",
@@ -150,11 +152,13 @@
       }
     ],
     "sourceDirectory": "connectors/linkedin-mcp-server",
-    "sourceArchiveSha256": "1dcdd2b9f7f90e99255213e405216d542a138eae29026f1c4d1556e78f192b2c"
+    "sourceArchiveSha256": "1dcdd2b9f7f90e99255213e405216d542a138eae29026f1c4d1556e78f192b2c",
+    "setupUrl": "https://connect.laplaceop.com/local-mcp/setup/linkedin-mcp-server",
+    "browserMode": "background-browser"
   },
   {
     "id": "yale-som-ems-mcp",
-    "name": "Yale SOM EMS",
+    "name": "Yale SOM EMS [Background Browser]",
     "description": "Find student rooms and preview one-time booking changes using your dedicated Yale SOM EMS browser login.",
     "capabilities": [
       "Search student room availability",
@@ -220,7 +224,9 @@
       }
     ],
     "sourceDirectory": "connectors/yale-som-ems-mcp",
-    "sourceArchiveSha256": "22447c4b7ea80bd044b9bc01fdd4085594924c3572058a3bdec981b1759c5a8a"
+    "sourceArchiveSha256": "22447c4b7ea80bd044b9bc01fdd4085594924c3572058a3bdec981b1759c5a8a",
+    "setupUrl": "https://connect.laplaceop.com/local-mcp/setup/yale-som-ems-mcp",
+    "browserMode": "background-browser"
   },
   {
     "id": "msoutlook-mcp",
@@ -296,7 +302,9 @@
       }
     ],
     "sourceDirectory": "connectors/msoutlook-mcp",
-    "sourceArchiveSha256": "df2c9e92ed0ac692817e311c2217ddf0da2db9fbfbec17c0c0e45eb8d25b9d1b"
+    "sourceArchiveSha256": "df2c9e92ed0ac692817e311c2217ddf0da2db9fbfbec17c0c0e45eb8d25b9d1b",
+    "setupUrl": "https://connect.laplaceop.com/local-mcp/setup/msoutlook-mcp",
+    "browserMode": "background-browser"
   },
   {
     "id": "slack-mcp-server",
@@ -392,6 +400,8 @@
         "linux-x64"
       ],
       "verification": "Existing automated evidence retained; approval does not assert additional authenticated or native-platform tests."
-    }
+    },
+    "setupUrl": "https://connect.laplaceop.com/local-mcp/setup/slack-mcp-server",
+    "browserMode": "background-browser"
   }
 ]

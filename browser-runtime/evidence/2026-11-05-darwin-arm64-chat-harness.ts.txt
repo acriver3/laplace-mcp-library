@@ -1,0 +1,272 @@
+/** Manual, read-only acceptance against the user's approved browser accounts.
+ * Build with the CLI's pinned esbuild; never runs as part of the unit suite.
+ * No provider content or credentials are logged or written to the evidence file.
+ */
+import { createHash, randomUUID } from "node:crypto";
+import { mkdtemp, readFile, writeFile, readdir, rename } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+
+import { Client } from "@modelcontextprotocol/client";
+import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
+import { browserProviders } from "@repo/browser-runtime/browser-approval";
+import type { ServerConfig } from "@repo/local-mcp-core/config";
+
+import { browserSetupTools, LocalBrowser, browserConfiguration } from "../src/browser";
+import { LocalStore } from "../src/store";
+
+let cleanup: () => Promise<void> = async () => {};
+async function main() {
+	if (
+		process.env.LAPLACE_LIVE_READ_ACCEPTANCE !== "true" ||
+		process.env.LAPLACE_TETHERED_BROWSER_V1 !== "true"
+	)
+		throw Error("Explicit live acceptance flags required.");
+	if (!process.argv.includes("--writes-authorized")) throw Error("Explicit write acceptance required");
+	const resources = resolve(process.argv[2] || "resources");
+	const root = await mkdtemp(join(tmpdir(), "laplace-browser-read-acceptance-"));
+	const keyring = new Map<string, string>();
+	const store = new LocalStore(root, async (key) => ({
+		getPassword: () => keyring.get(key) ?? null,
+		setPassword: (value) => {
+			keyring.set(key, value);
+		},
+		deletePassword: () => {
+			keyring.delete(key);
+		},
+	}));
+	const connections = new Map<
+		string,
+		{ config: ServerConfig; client: Client; transport: StdioClientTransport }
+	>();
+	cleanup = async () => {
+		for (const c of connections.values()) await c.client.close();
+	};
+	const evidence: {
+		platform: string;
+		startedAt: string;
+		runtimePin: unknown;
+		artifacts: unknown;
+		reads: Array<Record<string, unknown>>;
+		completedAt?: string;
+	} = {
+		platform: `${process.platform}-${process.arch}`,
+		startedAt: new Date().toISOString(),
+		runtimePin: JSON.parse(
+			await readFile(
+				resolve(resources, "../../../packages/browser-runtime/source-lock.json"),
+				"utf8",
+			).catch(() => '{"source":"local candidate"}'),
+		),
+		artifacts: JSON.parse(await readFile(join(resources, "browser-connectors.json"), "utf8")),
+		reads: [],
+	};
+	for (const [catalogId, workspace] of [
+		["msoutlook-mcp", undefined],
+		["slack-mcp-server", "https://somstudents.slack.com"],
+	] as const) {
+		const config = await browserConfiguration(resources, catalogId, workspace);
+		config.id = `acceptance-${config.id}`;
+        if (config.transport === "stdio" && catalogId === "slack-mcp-server") config.env = {...config.env, SLACK_MCP_ADD_MESSAGE_TOOL: "true", SLACK_MCP_REACTION_TOOL: "true", SLACK_MCP_ATTACHMENT_TOOL: "true"};
+		if (config.transport !== "stdio") throw Error("Unexpected transport.");
+		const transport = new StdioClientTransport({
+			command: join(resources, "runtimes/node"),
+			args: config.args,
+			env: { PATH: process.env.PATH ?? "", ...config.env },
+			stderr: "pipe",
+		});
+		// Connector stderr is deliberately not forwarded: it may include provider
+		// content. Protocol and read failures are reported by their operation name.
+		const client = new Client({ name: "Laplace authorized Mac acceptance", version: "1.0.0" });
+		await client.connect(transport);
+		transport.stderr?.on("data", () => {});
+		connections.set(config.id, { config, client, transport });
+	}
+	await store.mutate((state) => {
+		state.servers = [...connections.values()].map((c) => c.config);
+	});
+	const owner = "live-read-acceptance:" + randomUUID();
+	const browser = new LocalBrowser(store, resources, owner, {
+		root,
+		getServerConfig: (id) => {
+			const c = connections.get(id);
+			if (!c) throw Error("Unknown connection");
+			return c.config;
+		},
+		client: (id) => {
+			if (id !== owner) throw Error("Unrecognized acceptance owner");
+			return owner;
+		},
+		clientToolAllowed: (id) => id === owner,
+		changed: () => {},
+		catalogSetupCall: async (id, name, args, signal) => {
+			const item = connections.get(id);
+			if (!item?.config.managedBrowser) throw Error("Missing candidate");
+			const provider = item.config.managedBrowser.provider as keyof typeof browserProviders;
+			if (![...browserSetupTools, browserProviders[provider].verify].includes(name))
+				throw Error("Only read-only setup checks are permitted");
+			return item.client.callTool({ name, arguments: args }, { signal });
+		},
+	});
+	const output = join(root, "evidence.json");
+	let closing = false;
+	const close = async () => {
+		if (closing) return;
+		closing = true;
+		await browser.close();
+		for (const c of connections.values()) await c.client.close();
+		await writeFile(output, JSON.stringify(evidence, null, 2) + "\n", { mode: 0o600 });
+	};
+	cleanup = close;
+	process.once("SIGTERM", () => void close());
+	process.once("SIGINT", () => void close());
+	await browser.initialize();
+	const install = await browser.install();
+	console.log(
+		JSON.stringify({
+			extensionPath: install.extensionPath,
+			evidencePath: output,
+			providers: [...connections.keys()],
+		}),
+	);
+	for (const { config } of connections.values()) {
+		const flow = await browser.authenticate(config, true);
+		console.log(
+			JSON.stringify({
+				provider: config.name,
+				requestId: flow.requestId,
+				signInUrl: flow.view.signInUrl,
+			}),
+		);
+	}
+	const checked = new Set<string>();
+    const marker = "Laplace connector acceptance " + randomUUID();
+    const fixturePath = join(root, "laplace-acceptance-2mb.txt");
+    await writeFile(fixturePath, Buffer.alloc(2 * 1024 * 1024, 97), {mode: 0o600});
+    await writeFile(join(root, "control.json"), JSON.stringify({root, marker, fixturePath}), {mode: 0o600});
+	const deadline = Date.now() + 30 * 60 * 1000;
+	const lastStates = new Map<string, string>();
+    const chatReviews = new Map<string, unknown>();
+    const confirmationFiles = new Set<string>();
+	while (!closing && checked.size < connections.size) {
+		if (Date.now() > deadline) throw Error("Approval timed out");
+        for (const file of (await readdir(root)).filter(f => /^approve-\d+\.json$/.test(f))) {
+            if (confirmationFiles.has(file)) continue;
+            confirmationFiles.add(file);
+            const approval = JSON.parse(await readFile(join(root,file),"utf8"));
+            try {
+                await browser.approvals.confirmChat(approval.requestId, owner, approval.reviewId, approval.confirmed === true);
+                console.log(JSON.stringify({chatApprovalAccepted: approval.requestId}));
+            } catch (error) {
+                console.log(JSON.stringify({chatApprovalRejected: approval.requestId, reason: error instanceof Error ? error.message : "Rejected"}));
+            }
+        }
+        for (const view of browser.status().requests) {
+            if (view.state === "approval_required" && !chatReviews.has(view.requestId)) {
+                const review = browser.approvals.reviewChat(view.requestId, owner);
+                chatReviews.set(view.requestId, review);
+                await writeFile(join(root,"chat-reviews.json"),JSON.stringify([...chatReviews.values()],null,2),{mode:0o600});
+                console.log(JSON.stringify({chatReviewReady: view.provider, directory: root}));
+            }
+            if (lastStates.get(view.requestId) !== view.state) {
+				lastStates.set(view.requestId, view.state);
+				console.log(JSON.stringify({ provider: view.provider, state: view.state }));
+			}
+		}
+		for (const view of browser.status().requests) {
+			if (view.state !== "connected" || checked.has(view.requestId)) continue;
+			const item = [...connections.values()].find(
+				(c) =>
+					browserProviders[c.config.managedBrowser!.provider as keyof typeof browserProviders]
+						.label === view.provider,
+			)!;
+			const tools = await item.client.listTools();
+			const reads =
+				item.config.managedBrowser!.provider === "outlook"
+					? ["outlook_status", "outlook_list_folders"]
+					: ["laplace_slack_verify", "channels_list"];
+			for (const name of reads) {
+				const result = await item.client.callTool({ name, arguments: {} });
+				if (result.isError) throw Error(`Authenticated read failed: ${name}`);
+				evidence.reads.push({
+					provider: item.config.managedBrowser!.provider,
+					operation: name,
+					passed: true,
+					toolCount: tools.tools.filter((t) => !t.name.startsWith("laplace_")).length,
+					resultBytes: Buffer.byteLength(JSON.stringify(result)),
+					artifactSha256: item.config.managedBrowser!.artifactSha256,
+					at: new Date().toISOString(),
+				});
+				console.log(JSON.stringify({ read: name, passed: true }));
+			}
+			await writeFile(join(root, item.config.managedBrowser!.provider + "-tools.json"), JSON.stringify(tools, null, 2), {mode: 0o600});
+            checked.add(view.requestId);
+		}
+		if (browser.status().requests.some((r) => ["expired", "cancelled"].includes(r.state)))
+			throw Error("Approval expired or was cancelled. Restart acceptance when ready.");
+		await new Promise((resolve) => setTimeout(resolve, 1000));
+	}
+	if (checked.size !== connections.size) throw Error("Acceptance interrupted");
+    const grants = (await store.read()).browserConsent ?? [];
+    await writeFile(join(root, "identities.json"), JSON.stringify(grants.map(g => ({provider: g.provider, identity: g.candidate.identity}))), {mode: 0o600});
+    console.log(JSON.stringify({readyForControlledTests: true, directory: root, extensionExpected: "0.7.0"}));
+    const allowed = new Set(["outlook_create_draft", "outlook_update_draft", "outlook_get_email", "outlook_add_attachment", "outlook_list_attachments", "outlook_save_attachment", "outlook_delete_email", "users_search", "conversations_history", "conversations_add_message", "reactions_add", "reactions_remove"]);
+    let draftId = "";
+    let selfChannel = "";
+    const slackSelf = grants.find(g => g.provider === "slack-tethered")!.candidate.identity.userId;
+    const processed = new Set<string>();
+    while (!closing && Date.now() < deadline) {
+        const files = (await readdir(root)).filter(f => /^command-\d+\.json$/.test(f)).sort();
+        for (const file of files) {
+            if (processed.has(file)) continue;
+            processed.add(file);
+            const command = JSON.parse(await readFile(join(root,file), "utf8"));
+            const {provider, name, arguments: args = {}} = command;
+            if (name === "finish") { evidence.completedAt = new Date().toISOString(); closing = false; await close(); break; }
+            let result: unknown;
+            try {
+                if (!allowed.has(name)) throw Error("Operation outside acceptance allowlist");
+                if (name === "outlook_create_draft" && (draftId || args.subject !== marker || args.to?.length || args.cc?.length || args.include_signature !== false)) throw Error("Only one recipient-free synthetic draft permitted");
+                if (name.startsWith("outlook_") && name !== "outlook_create_draft" && (args.id ?? args.message_id) !== draftId) throw Error("Only the newly created test draft is permitted");
+                if (name === "outlook_add_attachment" && args.file_path !== fixturePath) throw Error("Only synthetic attachment permitted");
+                if (name === "outlook_save_attachment" && args.output_path !== join(root,"downloaded.txt")) throw Error("Use test output path");
+                if (name === "users_search" && args.query !== slackSelf) throw Error("Only self lookup permitted");
+                if (name === "conversations_add_message" && (!selfChannel || args.channel_id !== selfChannel || args.text !== marker || args.thread_ts || args.blocks)) throw Error("Only the test message to self is permitted");
+                if (["conversations_history", "reactions_add", "reactions_remove"].includes(name) && (!selfChannel || args.channel_id !== selfChannel)) throw Error("Only self channel permitted");
+                const item = [...connections.values()].find(c => c.config.managedBrowser!.provider === provider);
+                if (!item) throw Error("Unknown test connection");
+                const response = await item.client.callTool({name, arguments: args}, {signal: AbortSignal.timeout(90000)});
+                result = response;
+                const text = (response.content ?? []).filter(c => c.type === "text").map(c => c.text).join("\n");
+                if (!response.isError && name === "outlook_create_draft") draftId = /(?:^|\n)ID: ([^\n]+)/.exec(text)?.[1] ?? "";
+                if (!response.isError && name === "users_search") selfChannel = /\bD[A-Z0-9]{8,20}\b/.exec(text)?.[0] ?? "";
+                evidence.reads.push({provider, operation: name, passed: !response.isError, controlledTest: true, at: new Date().toISOString()});
+            } catch (error) { result = {isError: true, error: error instanceof Error ? error.message : "Unknown failure", uncertain: true}; }
+            await writeFile(join(root,file.replace("command-","result-")), JSON.stringify(result,null,2), {mode: 0o600});
+            await writeFile(join(root,"test-state.json"), JSON.stringify({draftId, selfChannel, slackSelf}), {mode: 0o600});
+            await writeFile(output, JSON.stringify(evidence,null,2), {mode: 0o600});
+            console.log(JSON.stringify({command: file, operation: name, resultSaved: true}));
+        }
+        await new Promise(resolve => setTimeout(resolve,500));
+    }
+    if (!evidence.completedAt) throw Error("Acceptance did not finish");
+
+	await close();
+	console.log(
+		JSON.stringify({
+			completed: true,
+			evidencePath: output,
+			evidenceSha256: createHash("sha256")
+				.update(await readFile(output))
+				.digest("hex"),
+		}),
+	);
+}
+void main().catch(async (error) => {
+ console.error(error instanceof Error ? error.message : "Unknown error");
+	console.error(
+		"Controlled browser acceptance did not complete. Inspect approval status and candidate logs locally.",
+	);
+	await cleanup();
+	process.exitCode = 1;
+});

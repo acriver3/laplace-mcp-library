@@ -5,7 +5,7 @@
   "description": "Laplace-maintained local MCP sources and MCPB bundles",
   "scripts": {
     "build:bundle": "node scripts/build-bundle.mjs",
-    "verify": "python3 scripts/verify.py",
+    "verify": "node browser-runtime/scripts/verify-source.mjs && python3 scripts/verify.py",
     "publish:releases": "python3 scripts/publish-releases.py",
     "build:slack": "python3 scripts/build-slack-ready.py"
   },

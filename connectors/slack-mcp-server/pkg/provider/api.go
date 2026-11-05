@@ -402,8 +402,8 @@ func (c *MCPSlackClient) LeaveConversationContext(ctx context.Context, channelID
 		// Enterprise Grid + session tokens: use edge API which goes through
 		// the webclient endpoint and bypasses enterprise_is_restricted.
 		notInChannel, err := c.edgeClient.LeaveConversation(ctx, channelID)
-		if err == nil {
-			return notInChannel, nil
+		if err == nil || os.Getenv("LAPLACE_TETHERED_BROWSER_V1") == "true" {
+			return notInChannel, err
 		}
 		// Fall back to standard API if edge fails.
 	}
@@ -633,6 +633,9 @@ func (c *MCPSlackClient) Raw() struct {
 }
 
 func New(transport string, logger *zap.Logger) *ApiProvider {
+	if os.Getenv("LAPLACE_TETHERED_BROWSER_V1") == "true" {
+		return newWithXOXC(transport, auth.NewBrowserAuth(), logger)
+	}
 	if os.Getenv("SLACK_MCP_XOXP_TOKEN") != "" || os.Getenv("SLACK_MCP_XOXB_TOKEN") != "" {
 		logger.Fatal("OAuth tokens are disabled in the Laplace Patchright edition; use browser/cli.mjs")
 	}

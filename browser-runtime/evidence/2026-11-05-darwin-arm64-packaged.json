@@ -1,0 +1,60 @@
+{
+	"platform": "darwin-arm64",
+	"recordedAt": "2026-11-05T03:19:42.364097+00:00",
+	"desktopSourceRevision": "6493b842664d086d5554f273ca6bde59574c8382",
+	"runtimeSourceRevision": "9d7725940206bbfc9a63952503c197488ff93a23",
+	"desktop": {
+		"app.asar": "1fc2767a9087496747b897e69f59eff2c4ebe7aa7fe8919cd9d3b5de5f24f567",
+		"helper/main.cjs": "8dbbfaf2e1545c8ae10f443c3f6a13969dbf97187039094168231fc4788b8134",
+		"helper/browser-native.cjs": null,
+		"electronSmoke": "passed",
+		"nativeStress": {
+			"platform": "darwin-arm64",
+			"distribution": "packaged",
+			"keychain": "passed",
+			"encryptedRestart": "passed",
+			"bundledNode": "passed",
+			"stdioBridge": "passed",
+			"bundledPluginLauncher": "passed",
+			"agentConnectorInstallation": "passed",
+			"repeatedBridgeReconnect": "passed",
+			"concurrentBridges": 32,
+			"sequentialBridges": 100,
+			"forcedBridgeTermination": "passed",
+			"helperRestart": "passed",
+			"uncertainWriteExactlyOnce": "passed",
+			"legacyAndModernNotifications": "passed",
+			"transportCatalogParity": "passed",
+			"sharedBackgroundProcess": "passed",
+			"gracefulCleanup": "passed",
+			"abruptTreeCleanup": "passed"
+		}
+	},
+	"cli": {
+		"artifacts": [
+			{
+				"name": "laplace-local-0.1.2-darwin-arm64.mcpb",
+				"platform": "darwin-arm64",
+				"version": "0.1.2",
+				"sha256": "4df855f0cb41b1a4f70a21beac14cdd2a3cc63eae6ff5d279bbbfc7ab1facc1b",
+				"size": 65265509
+			},
+			{
+				"name": "laplace-local-0.1.2-darwin-arm64.tar.gz",
+				"platform": "darwin-arm64",
+				"version": "0.1.2",
+				"sha256": "ac2c1cf64223eb4191dbf8e6e45726d150693d137e73a0a1b412e5521fd4ac80",
+				"size": 63586745
+			}
+		],
+		"acceptance": {
+			"keychain": "passed",
+			"stdio": "passed",
+			"discovery": "passed",
+			"toolCall": "passed",
+			"metadataPrivacy": "passed",
+			"processCleanup": "passed"
+		}
+	},
+	"scope": "Local unsigned macOS candidate packages; does not assert publication, notarization, production activation or Windows/Linux acceptance."
+}
