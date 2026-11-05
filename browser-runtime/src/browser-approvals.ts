@@ -22,7 +22,7 @@ export function browserAuthorizer(fn: () => void, clientId: string, tool: string
 }
 const grant = z.object({
 	serverId: z.string(),
-	provider: z.enum(["slack", "ycombinator", "outlook"]),
+	provider: z.enum(["slack", "ycombinator", "outlook", "slack-tethered"]),
 	workspace: z.string(),
 	clientId: z.string(),
 	tool: z.string(),
@@ -141,7 +141,7 @@ export class BrowserApprovals {
 		saved?: Grant,
 	) {
 		if (this.closed) throw Error("Laplace is stopping.");
-		workspace = provider === "slack" ? slackWorkspace(workspace) : workspace;
+		workspace = (provider === "slack" || provider === "slack-tethered") ? slackWorkspace(workspace) : workspace;
 		const owner = saved ??
 			(authorize && owners.get(authorize)) ?? {
 				clientId: "desktop",

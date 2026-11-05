@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -24,11 +25,13 @@ func main() {
 	var transport string
 	var enabledToolsFlag string
 	var noCache bool
+	var catalogOnly bool
 	flag.StringVar(&transport, "t", "stdio", "Transport type (stdio, sse or http)")
 	flag.StringVar(&transport, "transport", "stdio", "Transport type (stdio, sse or http)")
 	flag.StringVar(&enabledToolsFlag, "e", "", "Comma-separated list of enabled tools (empty = all tools)")
 	flag.StringVar(&enabledToolsFlag, "enabled-tools", "", "Comma-separated list of enabled tools (empty = all tools)")
 	flag.BoolVar(&noCache, "no-cache", false, "Skip user/channel cache loading on startup for faster initialization. Lookups by #channel-name or @username will not work; use channel/user IDs instead.")
+	flag.BoolVar(&catalogOnly, "catalog-json", false, "Print registered tool schemas without authentication or execution")
 	flag.Parse()
 
 	if enabledToolsFlag == "" {
@@ -68,6 +71,13 @@ func main() {
 		)
 	}
 
+	if catalogOnly {
+		s := server.NewCatalogServer(logger, enabledTools)
+		if err := json.NewEncoder(os.Stdout).Encode(s.CatalogTools()); err != nil {
+			os.Exit(1)
+		}
+		return
+	}
 	p := provider.New(transport, logger)
 	s := server.NewMCPServer(p, logger, enabledTools)
 

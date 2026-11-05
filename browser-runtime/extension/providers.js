@@ -1,3 +1,4 @@
+import { slackFullAction } from "./slack-full.js";
 import { slackRead } from "./slack.js";
 import { ycAction } from "./ycombinator.js";
 import { outlookAction } from "./outlook.js";
@@ -82,6 +83,13 @@ export const providers = {
 		],
 		read: slackRead,
 	},
+};
+providers["slack-tethered"] = {
+  ...providers.slack,
+  identify:"account.identify",
+  scopes:["Read channels, conversations, users, groups, saved items and attachments", "Send messages, change reactions, channel membership, read state, user groups and saved items when requested"],
+  methods: ["api.auth.test", "api.users.list", "api.users.info", "api.conversations.list", "api.conversations.info", "api.conversations.members", "api.conversations.history", "api.conversations.replies", "api.conversations.genericInfo", "api.users.conversations", "api.search.all", "api.search.messages", "api.files.info", "api.client.userBoot", "api.client.counts", "api.client.dms", "api.im.list", "api.users.prefs.get", "api.search.modules.channels", "api.usergroups.list", "api.usergroups.users.list", "api.saved.list", "api.chat.postMessage", "api.reactions.add", "api.reactions.remove", "api.conversations.mark", "api.conversations.leave", "api.conversations.join", "api.conversations.open", "api.conversations.view", "api.usergroups.create", "api.usergroups.update", "api.usergroups.users.update", "api.saved.update", "api.saved.clearCompleted", "edge.users/info", "edge.users/list", "edge.users/search", "edge.channels/membership", "files.download"],
+  read:slackFullAction,
 };
 export function provider(id) {
 	if (!Object.hasOwn(providers, id))

@@ -99,6 +99,7 @@ export class BrowserConnectionRelay {
 	private code = "";
 	private codeExpiry = 0;
 	private token = "";
+  private sessionRevision = "";
 	private approvalExpiry = 0;
 	private lastSeen = 0;
 	private identity?: { workspace: string; userId: string };
@@ -224,6 +225,7 @@ export class BrowserConnectionRelay {
 					this.code = "";
 					this.identity = parsed.identity;
 					this.token = secret();
+          this.sessionRevision = randomUUID();
 					this.revoked = false;
 					this.approvalExpiry = Date.now() + 8 * 60 * 60_000;
 					this.lastSeen = Date.now();
@@ -433,6 +435,7 @@ export class BrowserConnectionRelay {
 			expiresAt: new Date(this.codeExpiry).toISOString(),
 		};
 	}
+	connectionRevision() { return this.status().connected ? this.sessionRevision : undefined; }
 	status() {
 		return {
 			connected:

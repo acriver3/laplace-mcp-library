@@ -114,6 +114,15 @@ func shouldAddTool(name string, enabledTools []string, envVarName string) bool {
 }
 
 func NewMCPServer(provider *provider.ApiProvider, logger *zap.Logger, enabledTools []string) *MCPServer {
+	return newMCPServer(provider, logger, enabledTools, false)
+}
+
+// NewCatalogServer registers the real tools without contacting Slack.
+func NewCatalogServer(logger *zap.Logger, enabledTools []string) *MCPServer {
+	return newMCPServer(&provider.ApiProvider{}, logger, enabledTools, true)
+}
+
+func newMCPServer(provider *provider.ApiProvider, logger *zap.Logger, enabledTools []string, catalogOnly bool) *MCPServer {
 	s := server.NewMCPServer(
 		"Slack MCP Server",
 		version.Version,
@@ -591,6 +600,10 @@ func NewMCPServer(provider *provider.ApiProvider, logger *zap.Logger, enabledToo
 		}
 	}
 
+	if catalogOnly {
+		return &MCPServer{server: s, logger: logger}
+	}
+
 	logger.Info("Authenticating with Slack API...",
 		zap.String("context", "console"),
 	)
@@ -729,4 +742,15 @@ func buildLoggerMiddleware(logger *zap.Logger) server.ToolHandlerMiddleware {
 			return res, err
 		}
 	}
+}
+
+// CatalogTools uses the same registrations and permission flags as execution.
+// The browser wrapper can publish schemas before the user approves an account.
+func (s *MCPServer) CatalogTools() []mcp.Tool {
+	tools := make([]mcp.Tool, 0)
+	for _, registered := range s.server.ListTools() {
+		tools = append(tools, registered.Tool)
+	}
+	slices.SortFunc(tools, func(a, b mcp.Tool) int { return strings.Compare(a.Name, b.Name) })
+	return tools
 }

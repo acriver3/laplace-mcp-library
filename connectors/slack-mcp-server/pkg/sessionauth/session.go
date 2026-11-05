@@ -31,6 +31,9 @@ type ValueAuth struct {
 	cookies []*http.Cookie
 }
 
+// BrowserAuth carries an opaque transport marker, never a Slack token or cookie.
+func NewBrowserAuth() ValueAuth { return ValueAuth{token: "laplace-browser-session"} }
+
 func NewValueAuth(token, cookie string) (ValueAuth, error) {
 	if !strings.HasPrefix(cookie, "xoxd-") {
 		return ValueAuth{}, errors.New("a browser session cookie is required")
@@ -46,6 +49,9 @@ func NewValueAuth(token, cookie string) (ValueAuth, error) {
 }
 
 func NewValueCookiesAuth(token string, cookies []*http.Cookie) (ValueAuth, error) {
+	if os.Getenv("LAPLACE_TETHERED_BROWSER_V1") == "true" && token == "laplace-browser-session" && len(cookies) == 0 {
+		return NewBrowserAuth(), nil
+	}
 	if !strings.HasPrefix(token, "xoxc-") || len(token) <= 5 {
 		return ValueAuth{}, errors.New("only browser session tokens are supported")
 	}
