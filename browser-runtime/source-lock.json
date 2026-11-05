@@ -1,6 +1,6 @@
 {
 	"repository": "https://github.com/acriver3/laplace-mcp-library",
-	"revision": "a6b97a2b9e0e8aa1e2645c7c320d48cfa87d0055",
+	"revision": "59c4f979f61e033651b3c049787e020c7af9df01",
 	"version": "0.4.0",
 	"status": "source-candidate",
 	"files": {
@@ -37,13 +37,13 @@
 		"extension/worker.js": "25215c30c2e39e4a664d19669a2674f32ac07e16f33f6959e3e337332b6687b5",
 		"extension/ycombinator.js": "f0801ac71c90d7e210ffcf8b0bedc83b31627c4eb5658e26afaa1c12478e3d28",
 		"assets/outlook-server.cjs.gz": "5eb15eb20d2be90301785d7969e62477f6b31ecee8bdc00718b14761e32ef8a3",
-		"assets/outlook.json": "1e13f182077252f7056e71e3960aeb50904138a3c4aa3eb499eb87d103cd8c3c",
+		"assets/outlook.json": "c37c9226f007efc8d63453421dde008f5e9edecdcfb21b5c4bcdf44adea2d568",
 		"assets/slack-engine-darwin-arm64.gz": "c67b693e016ff55c03d0397503be4a62abd8eed0e6ff1005f999e99ef573953f",
 		"assets/slack-engine-darwin-x64.gz": "cdb1dc33f1e3dd5536aa571531c37a100e7a288542afc98594c95ac16071a41a",
 		"assets/slack-engine-linux-arm64.gz": "62e4990d3ab1baaf0bfc786468c58450a19c9851bbe6810d23f9318d8bd4d08d",
 		"assets/slack-engine-linux-x64.gz": "7633609319c00a969cf884f06049630e3a3e4f1295bdc811be7fb1b294d42e28",
 		"assets/slack-engine-win32-arm64.gz": "80aa972dc1097aa4d4e7508ab3301afcd9506b0a35e0a44527fa9ca61f17a3e4",
 		"assets/slack-engine-win32-x64.gz": "93dd0175c7435e977fb9d962ad70b2ab01a264b276f15db2f1592d1534e73fe6",
-		"assets/slack.json": "17f531e10b5398f68da4dd12e2acf961cbd8a57e1eb060b04c2cf2ad93dfb4ac"
+		"assets/slack.json": "5723b762e1ff0c3b2451b4d6bdf01e53ee5954556da218ed3e8130417f76628a"
 	}
 }
