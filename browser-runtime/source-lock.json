@@ -6,7 +6,7 @@
 	"files": {
 		"src/approval-page.ts": "f839784433c9bed17bbd17a7c84bfbbbd51a1dc3038f8afa14869f59830d4b49",
 		"src/browser-approval.ts": "f6fc31bd1df3fe130053e2efbf41ac3313699b5f8b484abad766fa2d09b05bed",
-		"src/browser-approvals.ts": "f7db7a2a8ee2f3a844fbd384e661e7a7285d812074309820c957f666fcd934b4",
+		"src/browser-approvals.ts": "90035bb19f88eec293255198878472ddd559b095a3c645631b917d3c6df8b1dd",
 		"src/browser-connection-relay.ts": "e20c3959226b1c4a29af08498b2db507148791a0b6486796bba9b827ef30344f",
 		"src/browser-extension-id.ts": "da1dfa6f9b15fa6fb29e90b00ca151173a6afcfdb1fd40e72bd5551a3446962a",
 		"src/browser-native-entry.ts": "62aceb0ea4e552917e4a5e9ac1b663ae9b6ecab807c07841a47f995cd7ec504a",

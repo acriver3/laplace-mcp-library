@@ -506,11 +506,12 @@ export class BrowserApprovals {
 									if (r.recoveryAttempts) this.recordRecovery(r, "recovered");
 									r.recoveryAttempts = 0;
 									r.view.recovery = undefined;
-                                    if (r.view.state !== "connected") this.update(
-										r,
-										"connected",
-										"Connected. Closing the tab pauses access; reopen it to reconnect this account.",
-									);
+									if (r.view.state !== "connected")
+										this.update(
+											r,
+											"connected",
+											"Connected. Closing the tab pauses access; reopen it to reconnect this account.",
+										);
 									r.nextRetryAt = undefined;
 									r.recoveryStartedAt = undefined;
 								}
