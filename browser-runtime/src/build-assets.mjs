@@ -1,0 +1,22 @@
+import { createHash } from "node:crypto";
+import { mkdir, copyFile, cp, readFile, writeFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { resolve, join } from "node:path";
+import { gunzipSync } from "node:zlib";
+/** Both clients build the same reviewed native entry with identical options. */
+export async function buildBrowserAssets(build, resources) {
+  const root = fileURLToPath(new URL("..", import.meta.url));
+  await mkdir(join(resources, "helper"), {recursive:true});
+  for (const [source, destination] of [["browser-native-entry", "browser-native-entry"], ["yc-server", "yc-browser"]]) {
+    await build({absWorkingDir: root, entryPoints:[`src/${source}.ts`], outfile:resolve(resources, `helper/${destination}.cjs`), bundle:true, platform:"node", format:"cjs", target:"node24", minify:true});
+  }
+  await cp(join(root,"extension"),join(resources,"browser-extension"),{recursive:true});
+  const outlook = JSON.parse(await readFile(join(root,"assets/outlook.json"),"utf8"));
+  const bytes = gunzipSync(await readFile(join(root,"assets/outlook-server.cjs.gz")));
+  const hash = bytes => createHash("sha256").update(bytes).digest("hex");
+  if (hash(bytes) !== outlook.sha256) throw Error("Outlook artifact integrity check failed.");
+  await writeFile(join(resources,outlook.file),bytes);
+  const yc = {catalogId:"ycombinator-demo", provider:"ycombinator", version:"0.1.0-demo.1", serverId:"ycombinator-demo", workspace:"https://apply.ycombinator.com", file:"helper/yc-browser.cjs", sha256:hash(await readFile(join(resources,"helper/yc-browser.cjs")))};
+  await writeFile(join(resources,"browser-connectors.json"), JSON.stringify([yc,outlook],null,2)+"\n");
+  await copyFile(join(root,"src/browser-native-host.cs"),join(resources,"helper/browser-native-host.cs"));
+}

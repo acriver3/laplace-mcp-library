@@ -70,7 +70,7 @@ export async function openBrowserApprovalPage(
 			const candidates = view.candidates
 				.map(
 					(c) =>
-						`<li><p>${escape(c.profileLabel)} — ${escape(c.identity.userId)} — ${escape(c.identity.workspace)}</p>${capabilities[c.id] ? form("approve", hidden("capability", capabilities[c.id]!), "Approve this account") : ""}</li>`,
+						`<li><p>${escape(c.profileLabel)} — ${escape(typeof c.identity.accountLabel === "string" ? c.identity.accountLabel : c.identity.userId)} — ${escape(c.identity.workspace)}</p>${capabilities[c.id] ? form("approve", hidden("capability", capabilities[c.id]!), "Approve this account") : ""}</li>`,
 				)
 				.join("");
 			const focus = (view.profiles ?? [])

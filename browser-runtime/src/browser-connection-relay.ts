@@ -57,14 +57,18 @@ async function json(request: IncomingMessage) {
 	return JSON.parse(Buffer.concat(parts).toString("utf8"));
 }
 /** Defense in depth: neither accidental provider credentials nor arbitrary error text leave the relay. */
-export function redactBrowserResult(value: unknown): unknown {
+export function redactBrowserResult(value: unknown, depth = 0): unknown {
+	if (depth > 100) throw Error("Browser response nesting exceeds the limit.");
 	if (typeof value === "string") return value.replace(/xox[baprscoed]-[^\s"'<>]+/g, "[redacted]");
-	if (Array.isArray(value)) return value.map(redactBrowserResult);
+	if (Array.isArray(value)) return value.map((item) => redactBrowserResult(item, depth + 1));
 	if (value && typeof value === "object")
 		return Object.fromEntries(
 			Object.entries(value)
-				.filter(([key]) => !/token|cookie|authorization|password|secret/i.test(key))
-				.map(([key, val]) => [key, redactBrowserResult(val)]),
+				.filter(([key, value]) => {
+          if ((key === "owaToken" || key === "graphToken") && (value === null || z.object({expiresAt: z.string().datetime(), minutesRemaining: z.number().int().optional()}).strict().safeParse(value).success)) return true;
+          return !/token|cookie|authorization|password|secret/i.test(key);
+        })
+				.map(([key, val]) => [key, redactBrowserResult(val, depth + 1)]),
 		);
 	return value;
 }
@@ -320,9 +324,10 @@ export class BrowserConnectionRelay {
 						)
 							throw Error("Response too large.");
 					}
+					const sanitized = parsed.ok ? redactBrowserResult(value) : undefined;
 					clearTimeout(pending.timer);
 					this.pending.delete(parsed.id);
-					if (parsed.ok) pending.resolve(redactBrowserResult(value));
+					if (parsed.ok) pending.resolve(sanitized);
 					else
 						pending.reject(
 							new Error(

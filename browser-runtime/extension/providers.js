@@ -1,9 +1,26 @@
 import { slackRead } from "./slack.js";
 import { ycAction } from "./ycombinator.js";
+import { outlookAction } from "./outlook.js";
 
 // Reviewed, bundled adapters only. Desktop cannot supply code, domains, or
 // arbitrary actions. New providers share discovery, consent, and session state.
 export const providers = {
+  outlook: {
+    origins: ["https://outlook.cloud.microsoft/*", "https://outlook.office.com/*", "https://outlook.office365.com/*"],
+    matches: url => /^https:\/\/outlook\.(?:cloud\.microsoft|office\.com|office365\.com)\//.test(url),
+    openUrl: workspace => workspace === "https://outlook.cloud.microsoft" ? workspace + "/mail/" : null,
+    label: "Outlook",
+    scopes: ["Read mail, calendars, contacts, directory, and attachments", "Send and change mail, calendar events, contacts, and mailbox settings when requested"],
+    identify: "account.identify",
+    methods: ["owa.get", "owa.cloudSettings", "owa.post", "owa.patch", "owa.delete", "graph.getPath", "graph.binary", "account.status"],
+    read: outlookAction,
+    failures: {
+      not_outlook_tab: "Open Outlook in this Chrome profile.",
+      sign_in_required: "Finish signing in to the intended account in Outlook, then review again.",
+      identity_mismatch: "The Outlook account changed. Review and approve the intended account again.",
+      request_failed: "Outlook is unavailable. Check the selected tab.",
+    },
+  },
 	ycombinator: {
 		origins: ["https://apply.ycombinator.com/*"],
 		matches: (url) => new URL(url).origin === "https://apply.ycombinator.com",

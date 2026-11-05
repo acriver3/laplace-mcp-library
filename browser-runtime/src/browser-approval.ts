@@ -14,6 +14,12 @@ export const browserCandidate = z
 	.strict();
 export type BrowserCandidate = z.infer<typeof browserCandidate>;
 export const browserProviders = {
+  outlook: {
+    label: "Outlook",
+    scopes: ["Read mail, calendars, contacts, directory, and attachments", "Send and change mail, calendar events, contacts, and mailbox settings when requested"],
+    revision: "outlook-full-v1",
+    verify: "outlook_list_folders",
+  },
 	slack: {
 		label: "Slack",
 		scopes: ["List channels", "Read conversation history and replies", "Search messages"],
