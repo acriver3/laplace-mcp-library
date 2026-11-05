@@ -305,6 +305,9 @@ export class BrowserApprovals {
     for (const r of this.requests.values())
       if (r.serverId === serverId && !r.terminal && (clientId === "desktop" || r.clientId === clientId))
         await this.cancel(r.id, clientId);
+    await this.store.mutate(state=>{
+      state.grants=state.grants.filter(grant=>grant.serverId!==serverId || (clientId!=="desktop" && grant.clientId!==clientId));
+    });
   }
 	async cancel(id: string, clientId: string, revoke = true) {
 		const r = this.requests.get(id);
