@@ -1,3 +1,4 @@
+import { gzipSync } from "node:zlib";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash, generateKeyPairSync, verify } from "node:crypto";
@@ -77,6 +78,19 @@ test("signs only exact native-qualified artifacts and never overwrites a release
     await writeFile(join(root, "artifact/server.cjs"), "changed");
     assert.notEqual(run("tampered.json").status, 0);
     await writeFile(join(root, "artifact/server.cjs"), "fixture");
+    const packed = gzipSync(Buffer.from("fixture"));
+    await writeFile(join(root, "artifact/server.cjs.gz"), packed);
+    files[0].compressed = { size: packed.length, sha256: hash(packed) };
+    const compressedEvidence = Buffer.from(
+      JSON.stringify({ ...JSON.parse(evidence), artifactSha256: hash(JSON.stringify(files)) }),
+    );
+    await writeFile(join(root, "evidence", hash(compressedEvidence) + ".json"), compressedEvidence);
+    index.releases[0].qualificationSha256 = hash(compressedEvidence);
+    await writeFile(join(root, "catalog.json"), JSON.stringify(index));
+    assert.equal(run("compressed.json").status, 0);
+    await writeFile(join(root, "artifact/server.cjs.gz"), Buffer.alloc(packed.length));
+    assert.notEqual(run("compressed-tamper.json").status, 0);
+    await writeFile(join(root, "artifact/server.cjs.gz"), packed);
     index.releases[0].platforms = ["win32-x64"];
     await writeFile(join(root, "catalog.json"), JSON.stringify(index));
     assert.notEqual(run("unqualified.json").status, 0);
