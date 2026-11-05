@@ -1,0 +1,11 @@
+{
+  "id": "slack-mcp-server",
+  "version": "1.1.0-laplace.1",
+  "libraryCommit": "f6982a17702e383c341975be44c38057138d386f",
+  "platform": "win32-x64",
+  "nodeArchive": "node-v24.19.0-win-x64.zip",
+  "nodeSha256": "57f71ab3652e797d84acddc79c81cc9ff1c6ddb2a1974cdb83f00fee9bff4c73",
+  "goVersion": "go1.27.3",
+  "cgoEnabled": false,
+  "authenticationAcceptance": "not performed"
+}

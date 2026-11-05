@@ -1,0 +1,290 @@
+[
+  {
+    "module": "github.com/andybalholm/brotli",
+    "version": "v1.2.0",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "github.com/bahlo/generic-list-go",
+    "version": "v0.2.0",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "github.com/buger/jsonparser",
+    "version": "v1.1.2",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "github.com/davecgh/go-spew",
+    "version": "v1.1.1",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "github.com/gocarina/gocsv",
+    "version": "v0.0.0-20240520201108-78e41c74b4b1",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "github.com/google/uuid",
+    "version": "v1.6.0",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "github.com/gorilla/websocket",
+    "version": "v1.5.3",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "github.com/invopop/jsonschema",
+    "version": "v0.13.0",
+    "notices": [
+      "COPYING"
+    ]
+  },
+  {
+    "module": "github.com/jpillora/backoff",
+    "version": "v1.0.0",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "github.com/klauspost/compress",
+    "version": "v1.18.0",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "github.com/mailru/easyjson",
+    "version": "v0.7.7",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "github.com/mark3labs/mcp-go",
+    "version": "v0.44.0",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "github.com/mattn/go-isatty",
+    "version": "v0.0.20",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "github.com/openai/openai-go",
+    "version": "v1.12.0",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "github.com/pmezard/go-difflib",
+    "version": "v1.0.0",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "github.com/refraction-networking/utls",
+    "version": "v1.8.2",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "github.com/rusq/slack",
+    "version": "v0.9.6-0.20250408103104-dd80d1b6337f",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "github.com/rusq/tagops",
+    "version": "v0.1.1",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "github.com/slack-go/slack",
+    "version": "v0.19.0",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "github.com/spf13/cast",
+    "version": "v1.7.1",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "github.com/stretchr/testify",
+    "version": "v1.11.1",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "github.com/takara2314/slack-go-util",
+    "version": "v0.4.0",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "github.com/tidwall/gjson",
+    "version": "v1.17.0",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "github.com/tidwall/match",
+    "version": "v1.1.1",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "github.com/tidwall/pretty",
+    "version": "v1.2.1",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "github.com/tidwall/sjson",
+    "version": "v1.2.5",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "github.com/wk8/go-ordered-map/v2",
+    "version": "v2.1.8",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "github.com/yosida95/uritemplate/v3",
+    "version": "v3.0.2",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "github.com/yuin/goldmark",
+    "version": "v1.7.16",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "go.uber.org/multierr",
+    "version": "v1.11.0",
+    "notices": [
+      "LICENSE.txt"
+    ]
+  },
+  {
+    "module": "go.uber.org/zap",
+    "version": "v1.27.1",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "golang.ngrok.com/muxado/v2",
+    "version": "v2.0.1",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "golang.ngrok.com/ngrok/v2",
+    "version": "v2.1.1",
+    "notices": [
+      "LICENSE.txt"
+    ]
+  },
+  {
+    "module": "golang.org/x/crypto",
+    "version": "v0.48.0",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "golang.org/x/net",
+    "version": "v0.50.0",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "golang.org/x/sync",
+    "version": "v0.19.0",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "golang.org/x/sys",
+    "version": "v0.41.0",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "golang.org/x/text",
+    "version": "v0.34.0",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "golang.org/x/time",
+    "version": "v0.14.0",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "google.golang.org/protobuf",
+    "version": "v1.36.6",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "module": "gopkg.in/yaml.v3",
+    "version": "v3.0.1",
+    "notices": [
+      "NOTICE",
+      "LICENSE"
+    ]
+  }
+]

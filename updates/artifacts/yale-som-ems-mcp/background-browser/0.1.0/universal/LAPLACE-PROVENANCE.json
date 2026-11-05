@@ -1,0 +1,9 @@
+{
+  "id": "yale-som-ems-mcp",
+  "version": "0.1.0",
+  "repository": "https://github.com/acriver3/Laplace",
+  "upstreamCommit": "ed48ceb9d04e2a3a352c70ff275cf534f99e79b8",
+  "upstreamVersion": "0.1.0",
+  "patches": [],
+  "sourceSubdirectory": "apps/yale-som-ems-mcp"
+}

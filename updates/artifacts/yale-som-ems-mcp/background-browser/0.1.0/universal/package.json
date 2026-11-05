@@ -1,0 +1,28 @@
+{
+	"name": "@repo/yale-som-ems-mcp",
+	"version": "0.1.0",
+	"private": true,
+	"license": "UNLICENSED",
+	"bin": {
+		"yale-som-ems-mcp": "dist/cli.js"
+	},
+	"type": "module",
+	"scripts": {
+		"build": "tsc",
+		"type-check": "tsc --noEmit",
+		"test": "tsc && node --test test/*.test.mjs",
+		"test:browser": "tsc && node --test test/browser.browser.mjs"
+	},
+	"dependencies": {
+		"@modelcontextprotocol/sdk": "1.32.1",
+		"playwright-core": "1.59.1",
+		"zod": "4.3.6"
+	},
+	"devDependencies": {
+		"@types/node": "25.6.0",
+		"typescript": "6.0.3"
+	},
+	"engines": {
+		"node": ">=24"
+	}
+}

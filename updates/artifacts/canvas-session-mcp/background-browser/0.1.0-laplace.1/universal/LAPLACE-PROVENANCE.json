@@ -1,0 +1,10 @@
+{
+  "id": "canvas-session-mcp",
+  "version": "0.1.0-laplace.1",
+  "repository": "https://github.com/CorCvusRamboChen/canvas-session-mcp",
+  "upstreamCommit": "9780f271fafc280498080222fe33374ac346fb03",
+  "upstreamVersion": "0.1.0",
+  "patches": [
+    "canvas-cookie-origin.patch"
+  ]
+}

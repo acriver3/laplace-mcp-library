@@ -1,0 +1,8 @@
+{
+  "id": "msoutlook-mcp",
+  "version": "0.5.0-laplace.1",
+  "repository": "https://github.com/shayanline/msoutlook-mcp",
+  "upstreamCommit": "834e3764e01aa06ddde73590a8bc71aeafab74c0",
+  "upstreamVersion": "0.5.0",
+  "patches": []
+}

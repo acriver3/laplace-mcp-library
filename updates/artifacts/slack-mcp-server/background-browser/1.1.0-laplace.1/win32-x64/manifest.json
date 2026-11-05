@@ -1,0 +1,52 @@
+{
+  "manifest_version": "0.3",
+  "name": "slack-mcp-server",
+  "display_name": "Slack for Laplace Local",
+  "version": "1.1.0-laplace.1",
+  "description": "Precompiled Slack MCP with bundled Node and dependencies. First login downloads Chromium; no compiler or npm needed.",
+  "author": {
+    "name": "Laplace"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/acriver3/laplace-mcp-library"
+  },
+  "license": "MIT",
+  "server": {
+    "type": "binary",
+    "entry_point": "runtime/node.exe",
+    "mcp_config": {
+      "command": "${__dirname}/runtime/node.exe",
+      "args": [
+        "${__dirname}/browser/cli.mjs",
+        "serve",
+        "--workspace",
+        "${user_config.workspace}"
+      ],
+      "env": {
+        "SLACK_MCP_ENABLED_TOOLS": "channels_list,conversations_history,conversations_replies,conversations_search_messages"
+      }
+    }
+  },
+  "compatibility": {
+    "platforms": [
+      "win32"
+    ]
+  },
+  "user_config": {
+    "workspace": {
+      "type": "string",
+      "title": "Slack workspace URL",
+      "description": "Your HTTPS Slack workspace URL. Complete login separately using browser/cli.mjs login.",
+      "required": true
+    }
+  },
+  "tools_generated": true,
+  "_meta": {
+    "com.withlaplace.runtime": {
+      "platform": "win32-x64",
+      "nodeVersion": "24.19.0",
+      "goVersion": "go1.27.3"
+    }
+  }
+}

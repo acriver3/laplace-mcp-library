@@ -1,0 +1,2 @@
+# Release payload bytes are immutable and must never undergo newline conversion.
+updates/artifacts/** -text -filter -ident

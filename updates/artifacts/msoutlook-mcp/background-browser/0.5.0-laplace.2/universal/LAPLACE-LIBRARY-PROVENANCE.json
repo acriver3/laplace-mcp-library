@@ -1,0 +1,7 @@
+{
+  "id": "msoutlook-mcp",
+  "version": "0.5.0-laplace.2",
+  "libraryCommit": "7db7ca2c8572aa0d3c0032abb13c65d537565670",
+  "sourceDirectory": "connectors/msoutlook-mcp",
+  "acceptance": "candidate; authenticated platform acceptance required"
+}

@@ -1,0 +1,71 @@
+{
+  "manifest_version": "0.4",
+  "name": "linkedin-mcp-server",
+  "display_name": "LinkedIn for Laplace Local",
+  "version": "4.26.2-laplace.1",
+  "description": "Read profiles, companies, jobs and conversations using a dedicated local LinkedIn browser session.",
+  "author": {
+    "name": "Daniel Sticker",
+    "url": "https://github.com/stickerdaniel/linkedin-mcp-server"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stickerdaniel/linkedin-mcp-server"
+  },
+  "license": "Apache-2.0",
+  "privacy_policies": [
+    "https://www.linkedin.com/legal/privacy-policy"
+  ],
+  "server": {
+    "type": "uv",
+    "entry_point": "linkedin_mcp_server/__main__.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--locked",
+        "--no-dev",
+        "--python",
+        "3.13",
+        "--project",
+        "${__dirname}",
+        "-m",
+        "linkedin_mcp_server",
+        "--transport",
+        "stdio",
+        "--auto-import",
+        "--no-daemon",
+        "--user-data-dir",
+        "${user_config.profile_dir}"
+      ],
+      "env": {
+        "PYTHONUTF8": "1"
+      }
+    }
+  },
+  "compatibility": {
+    "platforms": [
+      "win32",
+      "darwin"
+    ],
+    "runtimes": {
+      "python": ">=3.13,<3.14"
+    }
+  },
+  "tools_generated": true,
+  "user_config": {
+    "profile_dir": {
+      "type": "directory",
+      "title": "Dedicated LinkedIn profile directory",
+      "description": "Use a profile subdirectory in a dedicated session root outside the bundle.",
+      "required": true,
+      "default": "${HOME}/.laplace-local/sessions/linkedin/profile"
+    }
+  },
+  "_meta": {
+    "com.withlaplace.catalog": {
+      "upstream_commit": "01c2d5e036bb364efe5fde2546c8fd550b4f89f2",
+      "patches": []
+    }
+  }
+}
