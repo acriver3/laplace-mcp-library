@@ -196,3 +196,53 @@ describe('callTokenEndpoint timeout', () => {
     expect(await pending).toBeNull();
   });
 });
+
+describe('opt-in session recovery', () => {
+ beforeEach(() => { vi.stubEnv('LAPLACE_SESSION_RECOVERY_V1', 'true'); });
+ afterEach(() => vi.unstubAllEnvs());
+ it('shares concurrent refreshes and serializes resources against the rotated cache', async () => {
+  let cache: any = { ...baseCache };
+  store.readTokenCache.mockImplementation(() => cache);
+  store.writeTokenCache.mockImplementation(value => { cache = value; });
+  const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ access_token: 'owa', expires_in: 3600, refresh_token: 'rotated' }))
+    .mockResolvedValueOnce(jsonResponse({ access_token: 'graph', expires_in: 3600 }));
+  vi.stubGlobal('fetch', fetchMock);
+  expect(await Promise.all([refreshOwaToken(), refreshOwaToken(), refreshGraphToken()])).toEqual(['owa', 'owa', 'graph']);
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+  expect(new URLSearchParams(fetchMock.mock.calls[1][1].body).get('refresh_token')).toBe('rotated');
+  expect(cache).toMatchObject({owaToken:'owa',graphToken:'graph',refreshToken:'rotated'});
+ });
+ it.each(['invalid_grant', 'server_error'])('classifies %s and retains credentials', async (error) => {
+  store.readTokenCache.mockReturnValue({ ...baseCache });
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({error}, false, error === 'invalid_grant' ? 400 : 503)));
+  await expect(refreshOwaToken()).rejects.toMatchObject({code:error === 'invalid_grant' ? 'invalid_grant' : 'transport_unavailable'});
+  expect(store.writeTokenCache).not.toHaveBeenCalled();
+ });
+ it('rejects a network failure without indicating sign-out', async () => {
+  store.readTokenCache.mockReturnValue({ ...baseCache });
+  vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+  await expect(refreshOwaToken()).rejects.toMatchObject({code:'transport_unavailable'});
+ });
+});
+
+describe('recovery persistence failures', () => {
+ beforeEach(() => vi.stubEnv('LAPLACE_SESSION_RECOVERY_V1','true'));
+ afterEach(() => vi.unstubAllEnvs());
+ it('does not release successful tokens to callers when persistence fails', async () => {
+  store.readTokenCache.mockReturnValue({...baseCache});
+  store.writeTokenCache.mockImplementation(() => { throw new Error('disk unavailable'); });
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(jsonResponse({access_token:'new',expires_in:3600,refresh_token:'rotated'})));
+  const results = await Promise.allSettled([refreshOwaToken(),refreshOwaToken()]);
+  expect(results.map(result => result.status)).toEqual(['rejected','rejected']);
+  expect(store.writeTokenCache).toHaveBeenCalledTimes(1);
+ });
+ it('does not overwrite credentials if the account changes during refresh', async () => {
+  store.readTokenCache.mockReturnValue({...baseCache});
+  vi.stubGlobal('fetch',vi.fn(async () => {
+    store.readTokenCache.mockReturnValue({...baseCache,tenantId:'other'});
+    return jsonResponse({access_token:'new',expires_in:3600});
+  }));
+  await expect(refreshOwaToken()).rejects.toMatchObject({code:'refresh_failed'});
+  expect(store.writeTokenCache).not.toHaveBeenCalled();
+ });
+});

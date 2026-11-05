@@ -1,3 +1,7 @@
+function recoveryContent(error: unknown) {
+ const e = error as { recovery?: {state?: string; reason?: string}; retryAfterMs?: number };
+ return e?.recovery ? { structuredContent: { recovery: e.recovery, retryAfterMs: e.retryAfterMs ?? 0 } } : {};
+}
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { registerMailTools } from '../tools/mail-tools.js';
@@ -18,8 +22,14 @@ export function createTetheredServer(relay: OutlookRelay): McpServer {
   const register = server.tool.bind(server);
   server.tool = ((...values: unknown[]) => {
     const callback = values.pop() as (args: unknown, extra: {signal: AbortSignal}) => unknown;
-    return Reflect.apply(register, server, [...values, (args: unknown, extra: {signal: AbortSignal}) =>
-      withBrowserInvocation(extra.signal, () => callback(args, extra))]);
+    return Reflect.apply(register, server, [...values, async (args: unknown, extra: {signal: AbortSignal}) => {
+      try { return await withBrowserInvocation(extra.signal, () => callback(args, extra)); }
+      catch (error) {
+        const recovery = recoveryContent(error);
+        if (!recovery.structuredContent) throw error;
+        return { isError: true, ...recovery, content: [{type: 'text', text: error instanceof Error ? error.message : 'Browser unavailable.'}] };
+      }
+    }]);
   }) as typeof server.tool;
   registerTetheredAuthTools(server, () => relay.revoke());
   registerMailTools(server);

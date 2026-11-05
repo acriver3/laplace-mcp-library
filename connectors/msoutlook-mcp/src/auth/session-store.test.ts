@@ -209,3 +209,13 @@ describe('getConfigDir win32 without home', () => {
     expect(fresh.getSessionStatePath()).toContain('msoutlook-mcp-server-data');
   });
 });
+
+it('atomically replaces an encrypted cache under the recovery flag', () => {
+ vi.stubEnv('LAPLACE_SESSION_RECOVERY_V1', 'true');
+ try {
+   store.writeTokenCache(sampleCache);
+   store.writeTokenCache({...sampleCache, refreshToken:'rotated'});
+   expect(store.readTokenCache()?.refreshToken).toBe('rotated');
+   expect(readFileSync(store.getTokenCachePath(),'utf8')).not.toContain('rotated');
+ } finally { vi.unstubAllEnvs(); }
+});

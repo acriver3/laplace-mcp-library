@@ -12,7 +12,7 @@
  */
 
 import { scryptSync, createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, statSync, renameSync, openSync, fsyncSync, closeSync } from 'node:fs';
 import { homedir, hostname, userInfo } from 'node:os';
 import { join } from 'node:path';
 import { logger } from '../utils/logger.js';
@@ -132,7 +132,17 @@ function isEncryptedEnvelope(v: unknown): v is EncryptedEnvelope {
 function writeSecure(filePath: string, data: unknown): void {
   ensureConfigDir();
   const envelope = encryptJson(JSON.stringify(data));
-  writeFileSync(filePath, JSON.stringify(envelope, null, 2), { mode: 0o600, encoding: 'utf8' });
+  const content = JSON.stringify(envelope, null, 2);
+  if (process.env.LAPLACE_SESSION_RECOVERY_V1 !== 'true') {
+    writeFileSync(filePath, content, { mode: 0o600, encoding: 'utf8' });
+    return;
+  }
+  const temporary = filePath + '.' + randomBytes(16).toString('hex') + '.tmp';
+  try {
+    const fd = openSync(temporary, 'wx', 0o600);
+    try { writeFileSync(fd, content, 'utf8'); fsyncSync(fd); } finally { closeSync(fd); }
+    renameSync(temporary, filePath);
+  } finally { rmSync(temporary, { force: true }); }
 }
 
 function readSecure<T>(filePath: string): T | null {
