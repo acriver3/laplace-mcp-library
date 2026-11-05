@@ -1,6 +1,6 @@
 {
-	"name": "@laplace/browser-runtime",
-	"version": "0.4.1",
+	"name": "@repo/browser-runtime",
+	"version": "0.4.2",
 	"private": true,
 	"license": "Apache-2.0",
 	"type": "module",
@@ -13,6 +13,6 @@
 		"@modelcontextprotocol/client": "2.4.0",
 		"@modelcontextprotocol/core": "2.4.0",
 		"@modelcontextprotocol/server": "2.4.0",
-		"zod": "4.3.6"
+		"zod": "catalog:"
 	}
 }
