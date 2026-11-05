@@ -81,7 +81,7 @@
   },
   {
     "id": "linkedin-mcp-server",
-    "name": "LinkedIn",
+    "name": "LinkedIn [Background Browser]",
     "description": "Read profiles, companies, jobs and conversations using a dedicated local LinkedIn browser session.",
     "capabilities": [
       "Read profiles, companies and jobs",

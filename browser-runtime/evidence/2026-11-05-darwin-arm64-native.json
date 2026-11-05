@@ -1,0 +1,21 @@
+{
+	"platform": "darwin-arm64",
+	"at": "2026-11-05T02:15:26.438Z",
+	"nativeVersion": "0.3.0",
+	"protocol": 1,
+	"digest": "3d345a47812908286db9b2ca928138f11effb180b4b2957b298137142b915b0a",
+	"files": {
+		"runtimes/node": "e4b5a3af0e05c75de2eae013904145f40fe7fc2a6e6f17510128bf45cca4e79b",
+		"helper/browser-native-entry.cjs": "1805672906d0f3a07418b4dbdf3ce18ad707451676c64093d073183553fd95b3"
+	},
+	"checks": [
+		"simultaneous-owners",
+		"framed-native-process",
+		"remove-supplying-files",
+		"remove-desktop-owner",
+		"refuse-downgrade",
+		"remove-cli-owner",
+		"last-owner-recovery"
+	],
+	"passed": true
+}
