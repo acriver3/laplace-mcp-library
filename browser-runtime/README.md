@@ -7,7 +7,7 @@ The runtime has no Electron dependency. `BrowserApprovals` receives a host and c
 ## Compatibility
 
 - Native discovery protocol: 1, existing extension ID and native host name unchanged.
-- Extension: 0.6.0. Existing Slack/YC scopes and consent revisions are unchanged.
+- Extension: 0.7.0. Existing Slack/YC scopes and consent revisions are unchanged.
 - Chunked transfer: optional, advertised per invocation through `resultLimit`. The new extension uses the previous JSON path with older relays. Old extensions continue to handle the existing small Slack/YC operations.
 - Public setup URLs are independent of immutable historical MCPB documentation.
 
@@ -37,3 +37,5 @@ The candidate Outlook adapter retains all original tool registrations and opts a
 Keep catalog selection and new execution disabled until these gates pass. Existing MCPB releases retain their versions and dedicated/background browser behavior.
 
 The local builder emits `browser-runtime-manifest.json` with the target platform, source revision, compatibility versions and checksums of every packaged connector, native entry and extension file. CLI packaging rejects a platform mismatch or changed artifact. Native Windows launchers must be built on Windows. Do not activate `LAPLACE_TETHERED_BROWSER_V1` or the web `NEXT_PUBLIC_LAPLACE_TETHERED_BROWSER_V1` flag for release until the remaining gates pass.
+
+Extension 0.7.0 also preserves the credential sign-in broker from Desktop main `cfb2d15`. Its optional HTTPS site permission is requested for one explicit approved sign-in origin; it does not broaden Outlook or Slack connector operations. CLI and Desktop distribute the same extension. The earlier live-read evidence used extension 0.6.0 before this compatibility integration.
