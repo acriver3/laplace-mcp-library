@@ -202,7 +202,8 @@
 	},
 	"extension": {
 		"packagedVersion": "0.7.0",
-		"loadedVersion": "not independently reported by installed extension"
+		"loadedVersion": "0.7.0",
+		"attestation": "User confirmed Chrome Extensions displayed 0.70 (0.7.0 candidate); the runtime does not independently report the running extension version."
 	},
 	"attachmentRoundTrip": {
 		"bytes": 2097152,
@@ -211,7 +212,7 @@
 	},
 	"cleanup": {
 		"outlook": "Unsent test draft and attachment moved to Deleted Items",
-		"slack": "Test reaction removed; one synthetic self-message remains pending UI cleanup"
+		"slack": "Test reaction removed by connector; user confirmed deletion of the single synthetic self-message"
 	},
 	"harnessSha256": "86801f1d8adab69e68eeaaa42ab5aac05335d9b30890d62ba4337c682c434343",
 	"harnessPath": "evidence/2026-11-05-darwin-arm64-chat-harness.ts.txt"
