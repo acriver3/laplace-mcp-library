@@ -1,9 +1,30 @@
 # Laplace MCP Library
 
 The home for Laplace-maintained local MCP source code and MCPB bundles.
-The desktop client and browser extension live in [Laplace Desktop](https://github.com/acriver3/laplace-desktop).
+The shared browser runtime, extension, and maintained connector implementations live here. [Laplace Desktop](https://github.com/acriver3/laplace-desktop) and Laplace Local CLI consume pinned, reviewed copies.
 Previously named `slack-mcp-server-patchright`; the Slack fork and its Git history
 are preserved here alongside the other connectors.
+
+## Current connector setup
+
+The accepted macOS Apple Silicon release provides Outlook [Tethered] and Slack [Tethered] through the user's existing Chrome session. Use [Desktop 0.1.22 for macOS ARM64](https://github.com/acriver3/laplace-desktop/releases/tag/desktop-macos-v0.1.22) or Laplace Local CLI 0.1.3 for macOS ARM64. [Release evidence](reviews/browser-runtime-0.4.1-macos.md) records the exact artifacts and platform scope. Other platforms retain their existing releases. LinkedIn keeps its original background browser implementation.
+
+| Connector | Public setup instructions |
+| --- | --- |
+| Canvas [Background Browser] | https://connect.laplaceop.com/local-mcp/setup/canvas-session-mcp |
+| LinkedIn [Background Browser] | https://connect.laplaceop.com/local-mcp/setup/linkedin-mcp-server |
+| Yale SOM EMS [Background Browser] | https://connect.laplaceop.com/local-mcp/setup/yale-som-ems-mcp |
+| Outlook [Tethered] | https://connect.laplaceop.com/local-mcp/setup/msoutlook-mcp |
+| Slack [Tethered] | https://connect.laplaceop.com/local-mcp/setup/slack-mcp-server |
+| Y Combinator · Demo Only | https://connect.laplaceop.com/local-mcp/setup/ycombinator-demo |
+
+The displayed, copied, and agent-sent prompt is one sentence: `Please set up Slack [Tethered] with Laplace using these instructions: https://connect.laplaceop.com/local-mcp/setup/slack-mcp-server`.
+
+These pages cover Desktop and CLI installation, existing-connection reuse, authentication, explicit migration and verification. MCP Apps hosts use the approval card; other chats show the account/profile/scopes and wait for the user's “approve” reply. Provider sign-in links are returned when needed. Ordinary setup performs read-only verification.
+
+## Historical MCPB releases
+
+The following table and bundle instructions describe existing immutable MCPB releases. Their dedicated-browser behavior and original names remain version-specific.
 
 | MCP | Windows x64 | macOS Intel | macOS Apple Silicon | Linux x64 | What the MCPB includes |
 | --- | --- | --- | --- | --- | --- |
@@ -30,7 +51,7 @@ Chromium's OS shared libraries. A graphical desktop and internet access are
 required for first sign-in. Download the suffix matching your OS and CPU from
 [the catalog](catalog/local-mcp-bundles.json) or the [Slack 1.1.0-laplace.1 release](https://github.com/acriver3/laplace-mcp-library/releases/tag/slack-mcp-server-v1.1.0-laplace.1).
 
-## Install through Laplace Local
+## Install a historical MCPB through Laplace Local
 
 1. Find the connector in [the catalog](catalog/local-mcp-bundles.json) and download
    its MCPB using the catalog download URL or the links in
