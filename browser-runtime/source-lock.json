@@ -43,7 +43,7 @@
 		"extension/worker.js": "b4b138d19e8d4fa205c04f4c711cd63c2b6c276f81c693bfcaabf1a8c126d291",
 		"extension/ycombinator.js": "f0801ac71c90d7e210ffcf8b0bedc83b31627c4eb5658e26afaa1c12478e3d28",
 		"assets/outlook-server.cjs.gz": "1288168e8bea92dc0e7839053006797f9d5d3870cb2cf698edde11258189a57a",
-		"assets/outlook.json": "a504cf041f5b0644de120d08b31f7d858905f1176c6df86461a4ab27b88325d9",
+		"assets/outlook.json": "c498047fcca9091c1bc0a78cd2460077af318b505ed6c9b8ac30ebe7d7341d13",
 		"assets/slack-engine-darwin-arm64.gz": "c67b693e016ff55c03d0397503be4a62abd8eed0e6ff1005f999e99ef573953f",
 		"assets/slack-engine-darwin-x64.gz": "cdb1dc33f1e3dd5536aa571531c37a100e7a288542afc98594c95ac16071a41a",
 		"assets/slack-engine-linux-arm64.gz": "62e4990d3ab1baaf0bfc786468c58450a19c9851bbe6810d23f9318d8bd4d08d",

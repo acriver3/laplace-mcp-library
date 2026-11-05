@@ -7,7 +7,7 @@ await buildTethered();
 const output = new URL('../../../browser-runtime/assets/', import.meta.url);
 await mkdir(output,{recursive:true});
 const bytes = await readFile(new URL('../dist-tethered/server.cjs',import.meta.url));
-const manifest = {catalogId:'msoutlook-mcp',provider:'outlook',version:'0.6.0-candidate.1',serverId:'outlook',workspace:'https://outlook.cloud.microsoft',file:'helper/outlook-browser.cjs',sha256:createHash('sha256').update(bytes).digest('hex')};
+const manifest = {catalogId:'msoutlook-mcp',provider:'outlook',version:'0.6.0-candidate.2',serverId:'outlook',workspace:'https://outlook.cloud.microsoft',file:'helper/outlook-browser.cjs',sha256:createHash('sha256').update(bytes).digest('hex')};
 await writeFile(new URL('outlook-server.cjs.gz',output),gzipSync(bytes,{level:9}));
 await writeFile(new URL('outlook.json',output),JSON.stringify(manifest,null,2)+'\n');
 console.log(JSON.stringify({file:fileURLToPath(output),sha256:manifest.sha256}));

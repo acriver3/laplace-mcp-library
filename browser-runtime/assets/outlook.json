@@ -1,7 +1,7 @@
 {
   "catalogId": "msoutlook-mcp",
   "provider": "outlook",
-  "version": "0.6.0-candidate.1",
+  "version": "0.6.0-candidate.2",
   "serverId": "outlook",
   "workspace": "https://outlook.cloud.microsoft",
   "file": "helper/outlook-browser.cjs",

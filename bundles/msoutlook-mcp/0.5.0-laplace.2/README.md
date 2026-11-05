@@ -1,0 +1,1 @@
+Opt-in session recovery candidate. Built from connector source commit 7db7ca2. SHA-256: 7096182257433093f8521830fdb26ef69ec0606fc9edf89c10a53351eb78d411. 340 connector tests and type checking passed. Native authenticated Windows acceptance and internal trials remain pending. Existing stable catalog is unchanged.
