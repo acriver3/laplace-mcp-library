@@ -2,8 +2,8 @@
   "manifest_version": "0.3",
   "name": "canvas-session-mcp",
   "display_name": "Canvas for Laplace Local",
-  "version": "0.1.0-laplace.1",
-  "description": "Read courses, assignments, announcements and grades using your Canvas browser login.",
+  "version": "0.1.0-laplace.2",
+  "description": "Read Canvas courses, assignments, announcements and grades, and act for you: submit assignments, reply in discussions, send Inbox messages, join groups and manage your planner, using your Canvas browser login.",
   "author": {
     "name": "CorCvusRamboChen",
     "url": "https://github.com/CorCvusRamboChen/canvas-session-mcp"
@@ -74,7 +74,8 @@
     "com.withlaplace.catalog": {
       "upstream_commit": "9780f271fafc280498080222fe33374ac346fb03",
       "patches": [
-        "canvas-cookie-origin.patch"
+        "canvas-cookie-origin.patch",
+        "canvas-write-tools.patch"
       ]
     }
   }

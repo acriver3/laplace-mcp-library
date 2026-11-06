@@ -3,6 +3,12 @@ import { htmlToText, fileIdsIn, extractText, window } from './text.js';
 import { downloadDir } from './config.js';
 
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, openWorldHint: true };
+// Laplace modification: write tools. Anything graded or seen by other people needs confirm:true.
+const WRITE = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true };
+const confirm = z.literal(true).describe('Set true only after the user has seen and approved exactly what will be sent to Canvas');
+const escapeHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+// Canvas stores rich text as HTML. Plain text is wrapped in paragraphs; HTML is sent as given.
+const asHtml = (s) => (/<\/?[a-z][^>]*>/i.test(s) ? s : String(s).split(/\n{2,}/).map((p) => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`).join(''));
 const id = z.union([z.number().int(), z.string().regex(/^\d+$/)]).transform(String);
 const days = (d) => new Date(Date.now() + d * 86400000).toISOString();
 
@@ -98,6 +104,7 @@ export const TOOLS = [
         due: it.plannable_date, points: it.plannable?.points_possible,
         submitted: it.submissions ? !!it.submissions.submitted : undefined,
         missing: it.submissions?.missing || undefined, graded: it.submissions?.graded || undefined,
+        marked_done: it.planner_override?.marked_complete || undefined,
         course_id: it.course_id, id: it.plannable_id,
         url: it.html_url ? new URL(it.html_url, c.base).href : undefined,
       })));
@@ -284,7 +291,7 @@ export const TOOLS = [
         for (const e of entries || []) {
           if (e.deleted) continue;
           const pad = '  '.repeat(depth);
-          lines.push(`${pad}— ${who.get(e.user_id) || 'someone'} · ${e.created_at}`);
+          lines.push(`${pad}— ${who.get(e.user_id) || 'someone'} · ${e.created_at} · entry ${e.id}`);
           lines.push(htmlToText(e.message).split('\n').map((l) => pad + l).join('\n'), '');
           walk(e.replies, depth + 1);
         }
@@ -366,11 +373,233 @@ export const TOOLS = [
       return text(window(JSON.stringify(data, null, 1), { maxChars: 40000 }));
     },
   },
+  {
+    name: 'canvas_find_recipients',
+    title: 'Find message recipients',
+    description: 'Look up people you can message on Canvas (teachers, TAs, classmates) by name. Returns user ids for canvas_send_message.',
+    input: {
+      search: z.string().min(2).describe('Part of the person\'s name'),
+      course_id: id.optional().describe('Only people in this course'),
+    },
+    async run(c, { search, course_id }) {
+      const list = await c.list('search/recipients', { search, types: ['user'], context: course_id ? `course_${course_id}` : undefined, per_page: 20 }, { maxPages: 1 });
+      return json(list.map((r) => drop({
+        id: r.id, name: r.name,
+        roles: course_id ? r.common_courses?.[course_id] : undefined,
+      })));
+    },
+  },
+
+  {
+    name: 'canvas_list_groups',
+    title: 'Course groups',
+    description: 'Groups in a course (project teams, sign-up groups) with member counts, whether you are in each, and whether its group set lets students sign themselves up. Without course_id: the groups you are in.',
+    input: { course_id: id.optional() },
+    async run(c, { course_id }) {
+      const mine = await c.list('users/self/groups');
+      const mineIds = new Set(mine.map((g) => String(g.id)));
+      if (!course_id) return json(mine.map((g) => drop({ id: g.id, name: g.name, course_id: g.course_id, group_set_id: g.group_category_id, members: g.members_count })));
+      const [groups, sets] = await Promise.all([
+        c.list(`courses/${course_id}/groups`),
+        c.list(`courses/${course_id}/group_categories`).catch(() => []),
+      ]);
+      const setOf = new Map(sets.map((s) => [String(s.id), s]));
+      return json(groups.map((g) => {
+        const set = setOf.get(String(g.group_category_id));
+        return drop({
+          id: g.id, name: g.name, members: g.members_count, max_members: g.max_membership,
+          group_set: set?.name, group_set_id: g.group_category_id, mine: mineIds.has(String(g.id)) || undefined,
+          self_signup: set ? set.self_signup || 'off' : undefined, join_level: g.join_level,
+        });
+      }));
+    },
+  },
+
+  // ---- Write tools (Laplace modification). They act as you on Canvas. ----
+  {
+    name: 'canvas_join_group',
+    title: 'Join a group',
+    annotations: WRITE,
+    description: 'Join a course group as you (groups from canvas_list_groups whose group set allows self sign-up, or open community groups). In a sign-up group set you can only be in one group, so Canvas moves you out of your current group in that set; the result reports it as moved_from. Some groups only accept a request that a teacher approves. Tell the user which group they will join (and leave, if any) and get approval first.',
+    input: { group_id: id, confirm },
+    async run(c, { group_id }) {
+      const g = await c.get(`groups/${group_id}`);
+      const mine = await c.list('users/self/groups');
+      if (mine.some((x) => String(x.id) === group_id)) return json({ joined: true, group: g.name, already_member: true });
+      const previous = g.group_category_id && mine.find((x) => String(x.group_category_id) === String(g.group_category_id));
+      const m = await c.send('POST', `groups/${group_id}/memberships`, { user_id: 'self' }, { what: `Joining "${g.name}"` });
+      return json(drop({
+        joined: m.workflow_state === 'accepted', requested: m.workflow_state === 'requested' || undefined,
+        group: g.name, group_id: g.id, state: m.workflow_state,
+        moved_from: previous ? { id: previous.id, name: previous.name } : undefined,
+      }));
+    },
+  },
+  {
+    name: 'canvas_leave_group',
+    title: 'Leave a group',
+    annotations: WRITE,
+    description: 'Leave a group you belong to. Groups that teachers assign cannot be left, and rejoining a sign-up group may be impossible if it fills up. Get the user\'s approval first.',
+    input: { group_id: id, confirm },
+    async run(c, { group_id }) {
+      const g = await c.get(`groups/${group_id}`);
+      await c.send('DELETE', `groups/${group_id}/memberships/self`, undefined, { what: `Leaving "${g.name}"` });
+      return json({ left: true, group: g.name, group_id: g.id });
+    },
+  },
+  {
+    name: 'canvas_submit_assignment',
+    title: 'Submit an assignment',
+    annotations: { ...WRITE, destructiveHint: true },
+    description: 'Submit your work for an assignment as you: text entry, a website URL, or files from this computer. Each call creates a new attempt, and the latest attempt is the one graded. Before calling, show the user the assignment name, submission type, and the exact text/URL/file paths, and get their explicit approval. Never retry automatically: if the outcome is uncertain, check with canvas_get_assignment first.',
+    input: {
+      course_id: id,
+      assignment_id: id,
+      type: z.enum(['online_text_entry', 'online_url', 'online_upload']).describe('Must be one of the assignment\'s allowed submission types (see canvas_get_assignment)'),
+      text: z.string().min(1).max(500000).optional().describe('online_text_entry: the answer. Plain text (paragraphs kept) or HTML'),
+      url: z.string().url().optional().describe('online_url: the address to submit'),
+      file_paths: z.array(z.string().min(1)).min(1).max(20).optional().describe('online_upload: absolute paths of local files'),
+      comment: z.string().min(1).max(10000).optional().describe('Optional comment to the grader sent with the submission'),
+      confirm,
+    },
+    async run(c, { course_id, assignment_id, type, text: answer, url, file_paths, comment }) {
+      const a = await c.get(`courses/${course_id}/assignments/${assignment_id}`, { include: ['submission'] });
+      if (a.locked_for_user) throw new Error(`"${a.name}" is locked: ${htmlToText(a.lock_explanation || '') || 'not open for submissions'}`);
+      const allowed = a.submission_types || [];
+      if (!allowed.includes(type)) throw new Error(`"${a.name}" does not accept ${type}. Allowed: ${allowed.join(', ') || 'none'}.`);
+      const need = { online_text_entry: ['text', answer], online_url: ['url', url], online_upload: ['file_paths', file_paths] }[type];
+      if (!need[1]) throw new Error(`${type} needs ${need[0]}.`);
+      if (type === 'online_upload' && a.allowed_extensions?.length) {
+        const bad = file_paths.filter((f) => !a.allowed_extensions.includes(f.split('.').pop().toLowerCase()));
+        if (bad.length) throw new Error(`"${a.name}" only accepts ${a.allowed_extensions.join(', ')} files: ${bad.join(', ')}`);
+      }
+      const submission = { submission_type: type };
+      let files;
+      if (type === 'online_text_entry') submission.body = asHtml(answer);
+      if (type === 'online_url') submission.url = url;
+      if (type === 'online_upload') {
+        files = [];
+        for (const f of file_paths) files.push(await c.uploadFile(`courses/${course_id}/assignments/${assignment_id}/submissions/self/files`, f, { what: `Submitting "${a.name}"` }));
+        submission.file_ids = files.map((f) => f.id);
+      }
+      const s = await c.send('POST', `courses/${course_id}/assignments/${assignment_id}/submissions`,
+        drop({ submission, comment: comment ? { text_comment: comment } : undefined }), { what: `Submitting "${a.name}"` });
+      return json(drop({
+        submitted: true, assignment: a.name, type, attempt: s.attempt, submitted_at: s.submitted_at,
+        state: s.workflow_state, late: s.late || undefined, files: files?.map((f) => f.name),
+        replaced_attempt: a.submission?.attempt || undefined, url: a.html_url,
+      }));
+    },
+  },
+  {
+    name: 'canvas_comment_on_submission',
+    title: 'Comment on your submission',
+    annotations: WRITE,
+    description: 'Add a comment to your own submission for an assignment (visible to the teacher/grader). Show the user the exact comment and get approval first.',
+    input: { course_id: id, assignment_id: id, comment: z.string().min(1).max(10000), confirm },
+    async run(c, { course_id, assignment_id, comment }) {
+      const s = await c.send('PUT', `courses/${course_id}/assignments/${assignment_id}/submissions/self`,
+        { comment: { text_comment: comment } }, { what: 'Adding a submission comment' });
+      const last = (s.submission_comments || []).at(-1);
+      return json(drop({ commented: true, at: last?.created_at, comment: last?.comment || comment }));
+    },
+  },
+  {
+    name: 'canvas_post_discussion_reply',
+    title: 'Reply in a discussion',
+    annotations: WRITE,
+    description: 'Post a reply to a course discussion topic as you, or reply to a specific entry (entry ids are shown by canvas_get_discussion). Classmates and teachers will see it. Show the user the exact message and get approval first.',
+    input: {
+      course_id: id, topic_id: id,
+      message: z.string().min(1).max(100000).describe('Plain text (paragraphs kept) or HTML'),
+      reply_to_entry_id: id.optional().describe('Reply under this entry instead of to the topic'),
+      confirm,
+    },
+    async run(c, { course_id, topic_id, message, reply_to_entry_id }) {
+      const base = `courses/${course_id}/discussion_topics/${topic_id}/entries`;
+      const e = await c.send('POST', reply_to_entry_id ? `${base}/${reply_to_entry_id}/replies` : `${base}`,
+        { message: asHtml(message) }, { what: 'Posting a discussion reply' });
+      return json(drop({ posted: true, entry_id: e.id, parent_id: e.parent_id, created_at: e.created_at }));
+    },
+  },
+  {
+    name: 'canvas_send_message',
+    title: 'Send a Canvas Inbox message',
+    annotations: WRITE,
+    description: 'Send a Canvas Inbox message as you: reply in an existing conversation (conversation_id from canvas_inbox), or start a new one with recipient ids from canvas_find_recipients. Several recipients share one group conversation. Show the user the recipients, subject and exact text and get approval first.',
+    input: {
+      body: z.string().min(1).max(50000).describe('Message text'),
+      conversation_id: id.optional().describe('Reply in this conversation'),
+      recipient_ids: z.array(id).min(1).max(50).optional().describe('New conversation: user ids'),
+      subject: z.string().max(255).optional().describe('New conversation: subject'),
+      course_id: id.optional().describe('New conversation: the course it concerns'),
+      confirm,
+    },
+    async run(c, { body: msg, conversation_id, recipient_ids, subject, course_id }) {
+      if (conversation_id && recipient_ids) throw new Error('Give either conversation_id (reply) or recipient_ids (new conversation), not both.');
+      if (conversation_id) {
+        const cv = await c.send('POST', `conversations/${conversation_id}/add_message`, { body: msg }, { what: 'Sending a Canvas message' });
+        return json(drop({ sent: true, conversation_id: cv.id || conversation_id, subject: cv.subject }));
+      }
+      if (!recipient_ids) throw new Error('Give recipient_ids for a new conversation (see canvas_find_recipients), or conversation_id to reply.');
+      const r = await c.send('POST', 'conversations', drop({
+        recipients: recipient_ids, subject, body: msg, group_conversation: true,
+        context_code: course_id ? `course_${course_id}` : undefined,
+      }), { what: 'Sending a Canvas message' });
+      const list = Array.isArray(r) ? r : [r];
+      return json(drop({ sent: true, conversation_ids: list.map((x) => x.id).filter(Boolean), subject }));
+    },
+  },
+  {
+    name: 'canvas_planner_mark_done',
+    title: 'Mark a to-do done',
+    annotations: { ...WRITE, idempotentHint: true },
+    description: 'Mark an item in your Canvas planner/to-do list as done (or not done). Use type and id from canvas_upcoming. This only affects your own planner, not submissions.',
+    input: {
+      plannable_type: z.enum(['assignment', 'quiz', 'discussion_topic', 'wiki_page', 'planner_note', 'calendar_event', 'announcement', 'sub_assignment']),
+      plannable_id: id,
+      done: z.boolean().optional().describe('Default true; false marks it not done'),
+    },
+    async run(c, { plannable_type, plannable_id, done = true }) {
+      const existing = (await c.list('planner/overrides')).find((o) => o.plannable_type === plannable_type && String(o.plannable_id) === plannable_id);
+      const o = existing
+        ? await c.send('PUT', `planner/overrides/${existing.id}`, { marked_complete: done }, { what: 'Updating the planner' })
+        : await c.send('POST', 'planner/overrides', { plannable_type, plannable_id, marked_complete: done }, { what: 'Updating the planner' });
+      return json({ plannable_type, plannable_id, marked_done: o.marked_complete ?? done });
+    },
+  },
+  {
+    name: 'canvas_create_planner_note',
+    title: 'Add a to-do note',
+    annotations: WRITE,
+    description: 'Add a private to-do note to your Canvas planner (only you see it), optionally tied to a course.',
+    input: {
+      title: z.string().min(1).max(255),
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}(T.*)?$/).describe('When it is due: YYYY-MM-DD or an ISO date-time'),
+      details: z.string().max(10000).optional(),
+      course_id: id.optional(),
+    },
+    async run(c, { title, date, details, course_id }) {
+      const n = await c.send('POST', 'planner_notes', drop({ title, details, todo_date: date, course_id }), { what: 'Adding a planner note' });
+      return json(drop({ created: true, id: n.id, title: n.title, date: n.todo_date, course_id: n.course_id }));
+    },
+  },
+  {
+    name: 'canvas_delete_planner_note',
+    title: 'Delete a to-do note',
+    annotations: { ...WRITE, destructiveHint: true, idempotentHint: true },
+    description: 'Delete one of your private planner to-do notes (id from canvas_create_planner_note, or canvas_upcoming items of type planner_note).',
+    input: { note_id: id },
+    async run(c, { note_id }) {
+      await c.send('DELETE', `planner_notes/${note_id}`, undefined, { what: 'Deleting a planner note' });
+      return json({ deleted: true, id: note_id });
+    },
+  },
 ];
 
 export function registerTools(server, getClient) {
   for (const t of TOOLS) {
-    server.registerTool(t.name, { title: t.title, description: t.description, inputSchema: t.input, annotations: { ...READ_ONLY, title: t.title } },
+    server.registerTool(t.name, { title: t.title, description: t.description, inputSchema: t.input, annotations: { ...(t.annotations || READ_ONLY), title: t.title } },
       async (args) => {
         try { return await t.run(await getClient(), args || {}); }
         catch (e) { return { isError: true, content: [{ type: 'text', text: e.message }] }; }

@@ -4,6 +4,17 @@ import path from 'node:path';
 import { HOME, downloadDir, CMD } from './config.js';
 
 const MAX_DOWNLOAD = 60 * 1024 * 1024;
+const MAX_UPLOAD = 100 * 1024 * 1024;
+
+const TYPES = {
+  '.pdf': 'application/pdf', '.txt': 'text/plain', '.md': 'text/markdown', '.csv': 'text/csv', '.html': 'text/html',
+  '.json': 'application/json', '.zip': 'application/zip', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif', '.py': 'text/x-python', '.java': 'text/x-java', '.c': 'text/x-c', '.cpp': 'text/x-c++', '.sql': 'application/sql',
+  '.doc': 'application/msword', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  '.ipynb': 'application/x-ipynb+json', '.r': 'text/plain', '.m': 'text/plain',
+};
+const contentTypeOf = (name) => TYPES[path.extname(name).toLowerCase()] || 'application/octet-stream';
 
 const parseJson = (text) => JSON.parse(text.replace(/^while\(1\);/, ''));   // Canvas's anti-XSSI prefix
 
@@ -22,7 +33,24 @@ export function query(params = {}) {
   return q.toString();
 }
 
-// Read-only Canvas client. It only ever sends GET requests.
+// The session's CSRF token. Canvas requires it on every cookie-authenticated non-GET API call.
+export function csrfToken(cookieHeader) {
+  const pair = String(cookieHeader || '').split(/;\s*/).find((p) => p.startsWith('_csrf_token='));
+  if (!pair) return null;
+  try { return decodeURIComponent(pair.slice('_csrf_token='.length)); } catch { return null; }
+}
+
+// A write that may have reached Canvas. It is never retried automatically.
+export class UncertainWriteError extends Error {
+  constructor(what, cause) {
+    super(`${what}: the outcome is unknown (${cause}). Check Canvas before trying again; do not repeat blindly.`);
+    this.uncertain = true;
+  }
+}
+
+// Canvas client. GETs go through request(); writes (POST/PUT/DELETE) go through send(), which
+// adds the CSRF token, only ever talks to the Canvas origin, never follows redirects and never
+// retries once a request may have been processed.
 // `session()` returns { cookieHeader } and is called again (fresh=true) once if Canvas says 401.
 export class CanvasClient {
   constructor({ base, session, fetchImpl = fetch }) {
@@ -86,6 +114,90 @@ export class CanvasClient {
   async get(p, params = {}) {
     const res = await this.request(this.url(p, params));
     return parseJson(await res.text());
+  }
+
+  // POST/PUT/DELETE a Canvas API path with a JSON body. A 401 means Canvas rejected the request
+  // before acting on it, so the session is renewed and the call made once more. Anything else
+  // that leaves the outcome open (network failure, timeout, 5xx) is reported, not retried.
+  async send(method, p, body, { what = `${method} ${p}` } = {}) {
+    const url = this.url(p);
+    if (new URL(url).origin !== new URL(this.base).origin) throw new Error('Canvas writes must stay on the Canvas origin.');
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (!this.cookie || attempt === 1) this.cookie = (await this.session({ fresh: attempt === 1 })).cookieHeader;
+      const token = csrfToken(this.cookie);
+      if (!token) throw new Error(`The saved Canvas session has no CSRF token, so Canvas would refuse this change. Run: ${CMD} login`);
+      let res;
+      try {
+        res = await this.fetch(url, {
+          method,
+          headers: { Accept: 'application/json', 'Content-Type': 'application/json', Cookie: this.cookie, 'X-CSRF-Token': token },
+          body: body === undefined ? undefined : JSON.stringify(body),
+          redirect: 'manual',
+        });
+      } catch (e) {
+        throw new UncertainWriteError(what, e.message);
+      }
+      if (res.status === 401 && attempt === 0) { await res.body?.cancel?.(); continue; }
+      const text = await res.text().catch(() => '');
+      if (res.status >= 500) throw new UncertainWriteError(what, `Canvas ${res.status}`);
+      if (!res.ok) {
+        let msg = text.slice(0, 300);
+        try {
+          const j = parseJson(text);
+          msg = j.errors?.[0]?.message || (j.errors && typeof j.errors === 'object' ? JSON.stringify(j.errors) : null) || j.message || msg;
+        } catch { /* not JSON */ }
+        if (res.status === 422 && /authenticity|csrf/i.test(msg)) msg = `Canvas rejected the session's security token. Run: ${CMD} login`;
+        const err = new Error(`Canvas ${res.status}${msg ? `: ${msg}` : ''}`);
+        err.status = res.status;
+        throw err;
+      }
+      try { return text ? parseJson(text) : {}; } catch { return {}; }
+    }
+    throw new Error(`Canvas keeps answering 401. Run: ${CMD} login`);
+  }
+
+  // Uploads a local file through Canvas's three-step file API: ask Canvas for an upload slot
+  // (`slotPath`), send the bytes there, then confirm. Session cookies only go to the Canvas
+  // origin; any other upload host must be HTTPS and receives only Canvas's upload parameters.
+  async uploadFile(slotPath, filePath, { what = 'Upload' } = {}) {
+    if (!path.isAbsolute(filePath)) throw new Error(`Give an absolute path: ${filePath}`);
+    const stat = fs.statSync(filePath, { throwIfNoEntry: false });
+    if (!stat?.isFile()) throw new Error(`Not a file: ${filePath}`);
+    if (stat.size > MAX_UPLOAD) throw new Error(`${path.basename(filePath)} is ${(stat.size / 1048576).toFixed(1)} MB; the limit is ${MAX_UPLOAD / 1048576} MB.`);
+    const name = path.basename(filePath);
+    const slot = await this.send('POST', slotPath, { name, size: stat.size, content_type: contentTypeOf(name) }, { what: `${what} (requesting upload slot)` });
+    if (!slot.upload_url) throw new Error('Canvas did not return an upload URL.');
+    const target = new URL(slot.upload_url, this.base);
+    const sameOrigin = target.origin === new URL(this.base).origin;
+    if (!sameOrigin && target.protocol !== 'https:') throw new Error('External Canvas uploads must use HTTPS.');
+    const form = new FormData();
+    for (const [k, v] of Object.entries(slot.upload_params || {})) form.append(k, String(v));
+    form.append('file', new Blob([fs.readFileSync(filePath)]), name);   // the file must be the last field
+    const headers = { Accept: 'application/json' };
+    if (sameOrigin) Object.assign(headers, { Cookie: this.cookie, 'X-CSRF-Token': csrfToken(this.cookie) });
+    let res;
+    try {
+      res = await this.fetch(target.href, { method: 'POST', headers, body: form, redirect: 'manual' });
+    } catch (e) {
+      throw new UncertainWriteError(`${what} (sending ${name})`, e.message);
+    }
+    if (res.status >= 500) throw new UncertainWriteError(`${what} (sending ${name})`, `upload host ${res.status}`);
+    let info = {};
+    if ([301, 302, 303, 307, 308].includes(res.status)) {
+      await res.body?.cancel?.();
+      info = { location: res.headers.get('location') };
+    } else {
+      const text = await res.text().catch(() => '');
+      if (!res.ok) throw new Error(`Upload of ${name} failed (${res.status}): ${text.slice(0, 200)}`);
+      try { info = parseJson(text); } catch { info = {}; }
+    }
+    if (info.id) return { id: info.id, name: info.display_name || name, size: stat.size };
+    if (!info.location) throw new Error(`Canvas did not confirm the upload of ${name}.`);
+    const confirm = new URL(info.location, this.base);
+    if (confirm.origin !== new URL(this.base).origin) throw new Error('Canvas upload confirmation must come from the Canvas origin.');
+    const done = parseJson(await (await this.request(confirm.href)).text());
+    if (!done.id) throw new Error(`Canvas did not confirm the upload of ${name}.`);
+    return { id: done.id, name: done.display_name || name, size: stat.size };
   }
 
   // Follows Canvas's Link: rel="next" pagination.

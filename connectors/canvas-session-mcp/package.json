@@ -1,7 +1,7 @@
 {
   "name": "canvas-session-mcp",
   "version": "0.1.0",
-  "description": "MCP server that connects AI assistants (Claude, Cursor, Codex…) to Canvas LMS using your normal browser login — no access token needed. Read-only.",
+  "description": "MCP server that connects AI assistants (Claude, Cursor, Codex…) to Canvas LMS using your normal browser login — no access token needed. Reads Canvas and, with your confirmation, submits work, posts replies and sends messages.",
   "main": "src/server.js",
   "scripts": {
     "test": "node --test"

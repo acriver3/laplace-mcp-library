@@ -12,7 +12,7 @@
 Most Canvas integrations ask you to create a personal **access token**, and many universities no longer let students do that. This MCP server does what the Canvas website itself does: it uses **your normal login**. Sign in once in a real Chrome/Edge window (SSO and MFA as usual), and your AI assistant can read your courses.
 
 - **No token, no admin approval.** If you can open Canvas in a browser, this works.
-- **Read-only.** It only ever sends `GET` requests: it cannot submit, post or change anything.
+- **Reads by default; acts only when asked.** Laplace adds write tools (submit assignments, comment on your submission, reply in discussions, send Inbox messages, join or leave groups, manage your planner). Anything graded or visible to others needs `confirm: true`, and failed or uncertain writes are never retried automatically.
 - **Local.** Your login and files stay on your computer. Nothing goes anywhere except your school's Canvas.
 - **Reads and saves course files.** Slides, assignment PDFs and Word documents come back as text, and whole courses can be saved into a folder you choose.
 
@@ -62,6 +62,15 @@ These are real requests from one student's semester (course codes and IDs change
 | `canvas_calendar` | Calendar events: classes, exams, consultations |
 | `canvas_api_get` | Any other Canvas REST endpoint (GET only) |
 | `canvas_whoami` | Check the connection |
+| `canvas_find_recipients` | Find people to message (user ids for `canvas_send_message`) |
+| `canvas_submit_assignment` | **Write.** Submit text, a URL or local files as a new attempt (`confirm: true`) |
+| `canvas_comment_on_submission` | **Write.** Comment on your own submission (`confirm: true`) |
+| `canvas_post_discussion_reply` | **Write.** Reply to a discussion topic or entry (`confirm: true`) |
+| `canvas_send_message` | **Write.** Start or reply to a Canvas Inbox conversation (`confirm: true`) |
+| `canvas_list_groups` | Course groups, your memberships and whether students can sign up |
+| `canvas_join_group` / `canvas_leave_group` | **Write.** Join or leave a group; joining a sign-up group set moves you out of your current group in it (`confirm: true`) |
+| `canvas_planner_mark_done` | **Write.** Mark a planner item done or not done (only you see it) |
+| `canvas_create_planner_note` / `canvas_delete_planner_note` | **Write.** Add or delete a private to-do note in your planner |
 
 ### Staying signed in
 
@@ -125,7 +134,7 @@ Your session cookies are stored in `~/.canvas-session-mcp/session.json`, readabl
 现有的 Canvas 工具大多要你生成个人 **Access Token**，但很多大学已经不让学生自己生成了。这个 MCP 服务器的做法和 Canvas 网页版本身一样：用**你正常登录后的会话**。在真实的 Chrome/Edge 窗口里登录一次（学校 SSO、MFA 照常），之后 AI 就能读你的课程。
 
 - **不用 token，不用管理员批准**：浏览器能打开 Canvas 就能用。
-- **只读**：只发 `GET` 请求，不会提交、发帖或修改任何东西。
+- **默认只读，按需操作**：Laplace 版本增加了写入工具（提交作业、评论自己的提交、回复讨论、发送站内信、管理日程）。凡是计入成绩或他人可见的操作都需要 `confirm: true`，失败或结果不确定的写入不会自动重试。
 - **数据只在本地**：登录状态和下载的文件都留在你自己的电脑上，除了访问学校的 Canvas，不发往任何地方。
 - **能读也能存课件**：讲义、作业 PDF、Word 都能转成文字给 AI，也能把整门课的文件下载到你选的文件夹。
 
@@ -187,7 +196,7 @@ Canvas 和大部分学校的 SSO 用的是“会话 cookie”，浏览器一关�
 
 ### 隐私与使用须知
 
-会话 cookie 保存在 `~/.canvas-session-mcp/session.json`，只有你的系统账户能读。请像对待密码一样对待它，删掉整个文件夹就等于退出登录。本项目是非官方工具，与 Instructure 无关，只读取你在自己浏览器里本来就能看到的内容，请求频率也和正常浏览差不多。请遵守学校的 IT 使用政策，不要外传课程资料，并遵守各科关于 AI 使用的规定。
+会话 cookie 保存在 `~/.canvas-session-mcp/session.json`，只有你的系统账户能读。请像对待密码一样对待它，删掉整个文件夹就等于退出登录。本项目是非官方工具，与 Instructure 无关，只读取你在自己浏览器里本来就能看到的内容（写入工具只在你确认后以你的身份操作），请求频率也和正常浏览差不多。请遵守学校的 IT 使用政策，不要外传课程资料，并遵守各科关于 AI 使用的规定。
 
 ## Development
 
