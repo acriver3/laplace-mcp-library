@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "target": "darwin-arm64",
+  "distribution": "background-browser",
+  "commit": "1e248af8227dc96662fc211ff29285f50988e5c9",
+  "artifactSha256": "0d47846c48fd5177964e5f6fe6d114afa430de8be3a4a911243f4874c4d602be",
+  "reviewer": "Laplace release owner (explicit acceptance in implementation chat)",
+  "completedAt": "2026-11-06T15:07:41.342Z",
+  "result": "accepted",
+  "localValidation": "passed",
+  "userAcceptance": {
+    "statement": "I accept Canvas 0.1.0-laplace.2 for Windows and macOS, publish it.",
+    "acceptedAt": "2026-11-06T15:07:41.342Z",
+    "nativeResults": "not-attested"
+  }
+}
