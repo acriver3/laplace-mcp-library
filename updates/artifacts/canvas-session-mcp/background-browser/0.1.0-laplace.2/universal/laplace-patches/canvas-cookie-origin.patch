@@ -1,0 +1,62 @@
+diff --git a/src/canvas.js b/src/canvas.js
+--- a/src/canvas.js
++++ b/src/canvas.js
+@@ -47,11 +47,22 @@ export class CanvasClient {
+   async request(url, { raw = false } = {}) {
+     for (let attempt = 0; attempt < 2; attempt++) {
+       if (!this.cookie || attempt === 1) this.cookie = (await this.session({ fresh: attempt === 1 })).cookieHeader;
+-      const res = await this.fetch(url, {
+-        method: 'GET',
+-        headers: { Accept: raw ? '*/*' : 'application/json', Cookie: this.cookie },
+-        redirect: 'follow',
+-      });
++      // Laplace modification: keep Canvas session cookies on their origin.
++      let current = new URL(url);
++      let res;
++      for (let redirects = 0; ; redirects++) {
++        if (current.protocol !== 'https:' && current.origin !== new URL(this.base).origin) {
++          throw new Error('External Canvas downloads must use HTTPS.');
++        }
++        const headers = { Accept: raw ? '*/*' : 'application/json' };
++        if (current.origin === new URL(this.base).origin) headers.Cookie = this.cookie;
++        res = await this.fetch(current.href, { method: 'GET', headers, redirect: 'manual' });
++        if (![301, 302, 303, 307, 308].includes(res.status)) break;
++        const location = res.headers.get('location');
++        await res.body?.cancel?.();
++        if (!location || redirects >= 9) throw new Error('Invalid Canvas download redirect.');
++        current = new URL(location, current);
++      }
+       if (res.status === 401 && attempt === 0) { await res.body?.cancel?.(); continue; }
+       if (!res.ok) {
+         const text = await res.text().catch(() => '');
+diff --git a/test/credential-origin.test.js b/test/credential-origin.test.js
+new file mode 100644
+--- /dev/null
++++ b/test/credential-origin.test.js
+@@ -0,0 +1,25 @@
++// Laplace regression test for the cookie-origin modification.
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import { CanvasClient } from '../src/canvas.js';
++
++test('Canvas credentials stay on their origin across external downloads and redirects', async () => {
++  const calls = [];
++  const client = new CanvasClient({
++    base: 'https://canvas.example',
++    session: async () => ({ cookieHeader: 'test-session=private' }),
++    fetchImpl: async (url, options) => {
++      calls.push({ url, ...options });
++      return calls.length === 1
++        ? new Response(null, { status: 302, headers: { location: 'https://files.example/file.pdf' } })
++        : new Response('file');
++    },
++  });
++  await client.request('https://canvas.example/download', { raw: true });
++  assert.equal(calls[0].headers.Cookie, 'test-session=private');
++  assert.equal(calls[1].headers.Cookie, undefined);
++  assert.equal(calls[0].redirect, 'manual');
++  calls.length = 0;
++  await client.request('https://files.example/direct.pdf', { raw: true });
++  assert.equal(calls[0].headers.Cookie, undefined);
++});
+

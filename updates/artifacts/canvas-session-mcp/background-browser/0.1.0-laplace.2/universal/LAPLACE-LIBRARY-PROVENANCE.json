@@ -1,0 +1,7 @@
+{
+  "id": "canvas-session-mcp",
+  "version": "0.1.0-laplace.2",
+  "libraryCommit": "10b944594c6636743b91a78816294eee6b9097aa",
+  "sourceDirectory": "connectors/canvas-session-mcp",
+  "acceptance": "candidate; authenticated platform acceptance required"
+}
