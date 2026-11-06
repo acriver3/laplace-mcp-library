@@ -121,7 +121,7 @@ try {
 		stage,
 	);
 	let served;
-	for (let attempt = 0; attempt < 10 && !served; attempt++) {
+	for (let attempt = 0; attempt < 60 && !served; attempt++) {
 		try {
 			served = execFileSync(
 				npm,
@@ -129,7 +129,7 @@ try {
 				{ encoding: "utf8", shell: process.platform === "win32" },
 			).trim();
 		} catch {}
-		if (!served) await new Promise((accept) => setTimeout(accept, 3000));
+		if (!served) await new Promise((accept) => setTimeout(accept, 5000));
 	}
 	assert.equal(served, integrity, "Registry integrity does not match the published tarball");
 	console.log(`Published ${name}@${version} (${integrity})`);
