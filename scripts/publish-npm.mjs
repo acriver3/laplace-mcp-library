@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Publish a reviewed connector source to npm as @laplace/<id>, for runtime-managed npm installs.
-// Usage: npm run publish:npm -- <connector-id> <version> [--dry-run]
+// Usage: npm run publish:npm -- <connector-id> <version> [--dry-run] [--otp <code>]
 // Builds from a clean checkout of origin/main, pins the whole dependency tree with
 // npm-shrinkwrap.json, publishes the exact tarball without lifecycle scripts, and verifies that
 // the registry serves the same bytes. Published npm versions are immutable.
@@ -14,7 +14,8 @@ import { fileURLToPath } from "node:url";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");
-const [id, version] = args.filter((arg) => !arg.startsWith("--"));
+const otp = args.includes("--otp") ? args[args.indexOf("--otp") + 1] : undefined;
+const [id, version] = args.filter((arg, index) => !arg.startsWith("--") && args[index - 1] !== "--otp");
 const connectors = {
 	"msoutlook-mcp": { build: ["build"], test: true, workspaces: true },
 	"canvas-session-mcp": { build: [], test: true, workspaces: false },
@@ -105,7 +106,20 @@ try {
 	console.log(JSON.stringify({ name, version, commit, files: contents.length - 1, integrity }));
 	if (dryRun) process.exit(0);
 
-	run(npm, ["publish", tarball, "--access", "public", "--tag", "latest", "--ignore-scripts"], stage);
+	run(
+		npm,
+		[
+			"publish",
+			tarball,
+			"--access",
+			"public",
+			"--tag",
+			"latest",
+			"--ignore-scripts",
+			...(otp ? ["--otp", otp] : []),
+		],
+		stage,
+	);
 	let served;
 	for (let attempt = 0; attempt < 10 && !served; attempt++) {
 		try {
