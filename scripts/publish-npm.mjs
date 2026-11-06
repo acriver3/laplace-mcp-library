@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Publish a reviewed connector source to npm as @laplace/<id>, for runtime-managed npm installs.
+// Publish a reviewed connector source to npm as @withlaplace/<id>, for runtime-managed npm installs.
 // Usage: npm run publish:npm -- <connector-id> <version> [--dry-run] [--otp <code>]
 // Builds from a clean checkout of origin/main, pins the whole dependency tree with
 // npm-shrinkwrap.json, publishes the exact tarball without lifecycle scripts, and verifies that
@@ -22,7 +22,7 @@ const connectors = {
 };
 assert(Object.hasOwn(connectors, id ?? ""), `Choose one of: ${Object.keys(connectors).join(", ")}`);
 assert(/^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/.test(version ?? ""), "Supply an exact version");
-const name = `@laplace/${id}`;
+const name = `@withlaplace/${id}`;
 const registry = "https://registry.npmjs.org/";
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
 const git = (...command) => execFileSync("git", command, { cwd: root, encoding: "utf8" }).trim();
