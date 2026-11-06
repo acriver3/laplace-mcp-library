@@ -6,6 +6,20 @@ Prepare a reviewed unpacked bundle with `node scripts/prepare-update-artifact.mj
 
 The version-1 catalog has `schemaVersion`, increasing `sequence`, and `releases`. Each release has `id`, semver `version`, increasing per-connector `sequence`, `mode` (`tethered` or `background-browser`), `channel: "stable"`, `platforms`, `minDesktop`, `minCli`, `permissionRevision`, `configurationRevision`, `qualified: true`, `qualificationSha256`, immutable `commit`, `directory`, and `files` (`path`, `size`, `sha256`, `executable`). The installed launch recipe remains local. Catalogs cannot change browser modes, commands, accounts, credentials, or configuration. A new permission/configuration revision remains pending for explicit setup.
 
+## One-command release
+
+`npm run release:connector -- <connector-id> <new-version> --accept "<verbatim owner statement>"` performs the steps below and stops with an explanation on any failure. Re-running the same command resumes from recorded state in `.build/release/`.
+
+1. Checks a clean tree, that HEAD contains `origin/main`, and that the version is new.
+2. Builds the MCPB with `scripts/build-bundle.mjs` (running the connector's tests) and unpacks it.
+3. Prepares `updates/artifacts/<id>/<mode>/<version>/universal`, stores any file Git would rewrite (for example CRLF files under a connector's own `.gitattributes`) as `.gz` transport with a `compressed` receipt, commits the tree with `node_modules`, and verifies every committed blob against the inventory.
+4. Drafts one feed entry per platform from the previous release, bumping the index and per-connector sequences. Revisions are inherited; a changed manifest `server` block requires `--configuration-revision`, and `--permission-revision` / `--session-revision` are available when browser permissions or sessions change.
+5. Writes one hash-named acceptance record per platform (`result: "accepted"`, `nativeResults: "not-attested"`), or uses matching native records from `--evidence-dir`.
+6. Signs with `--key`, `$LAPLACE_UPDATE_SIGNING_KEY_FILE`, or the Doppler `laplace/prd` key (fetched into a temporary 0600 file that is always deleted; use `--doppler-scope <dir>` if your Doppler login is scoped elsewhere). The key must match `scripts/pinned-update-key.txt`, and the signature is verified after signing.
+7. Installs the exact signed bytes, runs `npm run verify`, commits with the acceptance statement quoted, and prints the push and published-file checks. Pass `--push` to push to `origin/main`.
+
+`--dry-run` does steps 1–6 into `.build/release/` without committing and removes its temporary artifact tree. Use `--platforms` to release a subset and `--mode` for connectors published in both modes. Test the helpers with `node --test scripts/release-lib.test.mjs`.
+
 Native qualification evidence is a JSON document named by its SHA-256 in a reviewed evidence directory. It contains `schemaVersion: 1`, `target`, `distribution` (the browser mode), `commit`, `artifactSha256` (SHA-256 of JSON.stringify(files)), `reviewer`, ISO `completedAt`, `result: "passed"`, and `checks`. Every check exported by `scripts/update-acceptance.mjs` must be `"passed"`. Each platform needs its own evidence and catalog entry. Do not convert absent, simulated, or cross-platform results into a pass.
 
 Sign locally using `node scripts/sign-update-catalog.mjs <catalog.json> <private-key.pem> <new-output.json> <evidence-directory>`. It verifies the native evidence and artifact inventory before signing. Keep signing keys outside the checkout. Publish the immutable files and signature through the existing reviewed local release process; no GitHub Workflow is added. The clients pin the existing Laplace Ed25519 public key.
