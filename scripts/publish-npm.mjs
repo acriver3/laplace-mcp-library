@@ -38,11 +38,14 @@ git("fetch", "-q", "origin", "main");
 assert.equal(git("status", "--porcelain"), "", "Commit or stash local changes first");
 const commit = git("rev-parse", "HEAD");
 assert.equal(commit, git("rev-parse", "origin/main"), "Publish only the current origin/main");
-const published = execFileSync(npm, ["view", `${name}@${version}`, "version", "--registry", registry], {
-	encoding: "utf8",
-	shell: process.platform === "win32",
-	stdio: ["ignore", "pipe", "ignore"],
-}).trim();
+let published = "";
+try {
+	published = execFileSync(npm, ["view", `${name}@${version}`, "version", "--registry", registry], {
+		encoding: "utf8",
+		shell: process.platform === "win32",
+		stdio: ["ignore", "pipe", "ignore"],
+	}).trim();
+} catch {} // E404: the package or version does not exist yet.
 assert.equal(published, "", `${name}@${version} is already published`);
 
 mkdirSync(join(root, ".build"), { recursive: true });
