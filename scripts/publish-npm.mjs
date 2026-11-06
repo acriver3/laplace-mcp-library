@@ -73,6 +73,7 @@ try {
 	};
 	manifest.publishConfig = { access: "public", registry };
 	manifest.laplace = { libraryCommit: commit, upstream };
+	if (Array.isArray(manifest.files)) manifest.files.push("npm-shrinkwrap.json");
 	delete manifest.scripts;
 	delete manifest.private;
 	writeFileSync(join(stage, "package.json"), JSON.stringify(manifest, null, 2) + "\n");
