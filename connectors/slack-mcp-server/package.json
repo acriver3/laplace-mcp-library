@@ -1,0 +1,33 @@
+{
+  "name": "slack-mcp-server",
+  "version": "1.1.0",
+  "description": "Slack MCP server (korotovsky/slack-mcp-server) for Laplace: Patchright browser sign-in with the Go server from a per-platform package.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "slack-mcp-server": "browser/cli.mjs"
+  },
+  "files": [
+    "browser/cli.mjs",
+    "browser/runtime.mjs",
+    "browser/session.mjs",
+    "browser/server-binary.mjs",
+    "licenses/Patchright-Apache-2.0.txt",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test browser/runtime.test.mjs browser/session.test.mjs browser/server-binary.test.mjs browser/smoke.test.mjs",
+    "install-browser": "patchright install chromium"
+  },
+  "dependencies": {
+    "patchright": "1.63.0"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/korotovsky/slack-mcp-server.git"
+  }
+}

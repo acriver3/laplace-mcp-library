@@ -2,8 +2,8 @@
   "manifest_version": "0.3",
   "name": "slack-mcp-server",
   "display_name": "Slack for Laplace Local",
-  "version": "1.1.0-laplace.1",
-  "description": "Precompiled Slack MCP with bundled Node and dependencies. First login downloads Chromium; no compiler or npm needed.",
+  "version": "1.1.0-laplace.2",
+  "description": "Slack MCP with dedicated Patchright browser sign-in, installed from npm. The Go server comes from a per-platform package; first login downloads Chromium.",
   "author": {
     "name": "Laplace"
   },
@@ -13,23 +13,20 @@
   },
   "license": "MIT",
   "server": {
-    "type": "binary",
-    "entry_point": "runtime/node",
+    "type": "node",
+    "entry_point": "browser/cli.mjs",
     "mcp_config": {
-      "command": "${__dirname}/runtime/node",
+      "command": "node",
       "args": [
         "${__dirname}/browser/cli.mjs",
         "serve",
         "--workspace",
-        "${user_config.workspace}"
+        "${user_config.workspace}",
+        "--profile-dir",
+        "${user_config.profile_dir}"
       ],
       "env": {
         "SLACK_MCP_ENABLED_TOOLS": "channels_list,conversations_history,conversations_replies,conversations_search_messages"
-      },
-      "platform_overrides": {
-        "win32": {
-          "command": "${__dirname}/runtime/node.exe"
-        }
       }
     }
   },
@@ -38,14 +35,24 @@
       "win32",
       "darwin",
       "linux"
-    ]
+    ],
+    "runtimes": {
+      "node": ">=22"
+    }
   },
   "user_config": {
     "workspace": {
       "type": "string",
       "title": "Slack workspace URL",
-      "description": "Your HTTPS Slack workspace URL. Complete login separately using browser/cli.mjs login.",
+      "description": "Your HTTPS Slack workspace URL. Complete login separately with slack-mcp-server login using the same profile.",
       "required": true
+    },
+    "profile_dir": {
+      "type": "directory",
+      "title": "Dedicated Slack browser profile",
+      "description": "A dedicated Patchright profile outside the package directory. Use the same profile for login and serve.",
+      "required": true,
+      "default": "${HOME}/.laplace-local/sessions/slack-patchright/profile"
     }
   },
   "tools_generated": true

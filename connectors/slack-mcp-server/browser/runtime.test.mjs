@@ -6,7 +6,7 @@ test('existing browser is reused without installing', async () => {
   await ensureBrowser('login', { exists: () => true, install: () => assert.fail('unexpected installation') });
 });
 test('MCP startup never downloads or opens a sign-in flow', async () => {
-  await assert.rejects(ensureBrowser('serve', { exists: () => false, install: () => assert.fail('unexpected installation') }), /Run the bundled slack launcher/);
+  await assert.rejects(ensureBrowser('serve', { exists: () => false, install: () => assert.fail('unexpected installation') }), /Run slack-mcp-server login --workspace/);
 });
 test('login installs once and checks the executable before proceeding', async () => {
   let ready = false, installs = 0;
