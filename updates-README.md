@@ -10,6 +10,12 @@ scripts that produced them (`build-bundle.mjs`, `release-connector.mjs`,
 `build-slack-ready.py`, `bundle-archive.py`, `publish-releases.py`) have been
 retired.
 
+To release a connector now, publish it with
+`npm run publish:npm -- <id> <version> --otp <code>` from a clean `origin/main`,
+then update the catalog entry's `version` and `acceptance` in
+`catalog/local-mcp-bundles.json`. npm versions are immutable, so a fix always gets
+a new version.
+
 ## What installed clients read
 
 Desktop and Laplace Local consume `updates/stable.json` and its detached signature

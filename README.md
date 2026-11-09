@@ -1,7 +1,10 @@
 # Laplace MCP Library
 
-The home for Laplace-maintained local MCP source code and MCPB bundles.
-The shared browser runtime, extension, and maintained connector implementations live here. [Laplace Desktop](https://github.com/acriver3/laplace-desktop) and Laplace Local CLI consume pinned, reviewed copies.
+The home for Laplace-maintained local MCP source code. Connectors are published
+to npm as `@withlaplace/<id>` packages, and [Laplace Desktop](https://github.com/acriver3/laplace-desktop)
+installs the version named in [the catalog](catalog/local-mcp-bundles.json).
+The shared browser runtime and extension also live here; Desktop and Laplace Local
+CLI consume pinned, reviewed copies of those.
 Previously named `slack-mcp-server-patchright`; the Slack fork and its Git history
 are preserved here alongside the other connectors.
 
@@ -22,135 +25,95 @@ The displayed, copied, and agent-sent prompt is one sentence: `Please set up Sla
 
 These pages cover Desktop and CLI installation, existing-connection reuse, authentication, explicit migration and verification. MCP Apps hosts use the approval card; other chats show the account/profile/scopes and wait for the user's “approve” reply. Provider sign-in links are returned when needed. Ordinary setup performs read-only verification.
 
+## Connectors on npm
+
+| Connector | npm package | Catalog version | Platforms | Runtime |
+| --- | --- | --- | --- | --- |
+| [Canvas [Background Browser]](connectors/canvas-session-mcp/README.md) | `@withlaplace/canvas-session-mcp` | 0.1.0-laplace.2 | Windows x64, macOS Intel, macOS Apple Silicon | Node; Chrome/Edge |
+| [LinkedIn [Background Browser]](connectors/linkedin-mcp-server/README.md) | `@withlaplace/linkedin-mcp-server` | 4.26.2-laplace.2 | Windows x64, macOS Intel, macOS Apple Silicon | Node launcher running the locked Python project with uv (Python 3.13) |
+| [Yale SOM EMS [Background Browser]](connectors/yale-som-ems-mcp/README.md) | `@withlaplace/yale-som-ems-mcp` | 0.1.1 | Windows x64, macOS Apple Silicon | Node 24; Chrome/Edge |
+| [Outlook](connectors/msoutlook-mcp/README.md) | `@withlaplace/msoutlook-mcp` | 0.5.0-laplace.2 | Windows x64, macOS Intel, macOS Apple Silicon | Node; Chrome/Edge |
+| [Slack](connectors/slack-mcp-server/README.md) | `@withlaplace/slack-mcp-server` | 1.1.0-laplace.2 | Windows x64, macOS Intel, macOS Apple Silicon, Linux x64 | Node launcher with Patchright; Go server from `@withlaplace/slack-mcp-server-<os>-<cpu>` |
+
+Each catalog entry names the npm `package`, `distTag`, `bin`, launch `args` and
+`env`. Values may use `${user_config.<key>}` (a setting from the connector's
+`manifest.json`) and `${package_dir}` (the installed package directory). The entry
+also lists `platforms`, whether it is `published`, and per-platform `acceptance`
+records naming the version that was accepted and the evidence. Acceptance differs
+by connector: Canvas/LinkedIn have user-confirmed Windows/macOS acceptance; EMS has
+Windows x64/macOS Apple Silicon acceptance of 0.1.0; Outlook has release approval
+but no recorded authenticated native-platform test; Slack has no acceptance record
+and remains unavailable for installation. See the catalog and `reviews/`.
+
+Desktop installs a connector with `npm install --ignore-scripts` into an isolated
+directory, so lifecycle scripts never run. `@withlaplace` packages must ship
+`npm-shrinkwrap.json`, which pins every transitive dependency to registry tarballs
+with sha512 integrity. Desktop then runs the package's `bin`: JavaScript launchers
+run with Desktop's bundled Node. LinkedIn's launcher runs
+`uv run --locked --no-dev --python 3.13 --project <package dir> -m linkedin_mcp_server`
+(`LAPLACE_UV` selects uv; Desktop runs `uv sync --locked --no-dev --python 3.13` in
+the package directory first). Slack's main package lists one optional package per
+platform containing only its cross-compiled Go server, and npm installs the matching
+one. No credentials or browser profiles are shipped; keep sessions outside the
+package directory.
+
+## Release a connector
+
+Use Node 24+ and the connector's declared toolchain (Slack needs the Go version in
+`scripts/slack-runtime-lock.json`; set `GO_BINARY` if it is not `go` on PATH).
+Commit and push the reviewed source to `origin/main` first: `publish:npm` only
+publishes from a clean checkout whose HEAD is `origin/main`, and builds from
+`git archive` of `connectors/<id>`, so local files and sessions are never packaged.
+
+```sh
+npm ci --ignore-scripts
+npm run verify
+npm run publish:npm -- <id> <version> --dry-run
+npm run publish:npm -- <id> <version> --otp <code>
+```
+
+The script installs locked dependencies without scripts, builds and runs the
+connector's tests, renames the package to `@withlaplace/<id>`, converts its
+lockfile into `npm-shrinkwrap.json`, packs, publishes with lifecycle scripts
+disabled, and checks that the registry serves the same integrity. For Slack it
+also builds and publishes `@withlaplace/slack-mcp-server-<os>-<cpu>` for all four
+platforms first, at the same version, and pins them in the main package's
+shrinkwrap; if the one-time password expires midway, rerun the same command with a
+new code and it reuses platform packages already published from that commit.
+
+npm versions are immutable: a published version can never be replaced, so any fix
+gets a new version (for example `0.1.0-laplace.3`). After publishing, update the
+catalog entry's `version` (and the connector manifest's `version`), record
+`acceptance` for each platform actually tested or accepted with that version, then
+run `npm run verify` and `python3 scripts/verify.py --registry --strict` before
+pushing the catalog. A new version does not inherit acceptance; publish the
+package before pushing a catalog that references it. No GitHub Actions are
+configured by this library.
+
 ## Historical MCPB releases
 
-The following table and bundle instructions describe existing immutable MCPB releases. Their dedicated-browser behavior and original names remain version-specific.
+Earlier releases were MCPB bundles. They stay in `bundles/<connector-id>/<version>/`
+at their release tags, and the signed update feed in `updates/` is frozen (see
+[updates-README.md](updates-README.md)), because already-installed Desktop and
+Laplace Local versions still read them. No new bundles are built.
 
-| MCP | Windows x64 | macOS Intel | macOS Apple Silicon | Linux x64 | What the MCPB includes |
-| --- | --- | --- | --- | --- | --- |
-| [Canvas [Background Browser]](connectors/canvas-session-mcp/README.md) | Supported | Supported | Supported | Not verified | JavaScript server and dependencies; Node and Chrome/Edge required |
-| [LinkedIn [Background Browser]](connectors/linkedin-mcp-server/README.md) | Supported | Supported | Supported | Not verified | Python source and lockfile; Python 3.13, uv and browser setup required |
-| [Yale SOM EMS [Background Browser]](connectors/yale-som-ems-mcp/README.md) | Supported | Not verified | Supported | Not verified | Compiled server and dependencies; Node 24 and Chrome/Edge required |
-| [Outlook](connectors/msoutlook-mcp/README.md) | Supported | Supported | Supported | Not verified | Compiled server and dependencies; Node and Chrome/Edge required |
-| [Slack](connectors/slack-mcp-server/README.md) | Supported | Supported | Supported | Supported | Go server, Node runtime and dependencies; no local build |
-
-“Supported” lists the existing release's declared OS/CPU targets. Acceptance
-records differ: Canvas/LinkedIn have user-confirmed Windows/macOS acceptance;
-EMS has Windows x64/macOS Apple Silicon acceptance; Outlook has release approval
-but no recorded authenticated native-platform test. See the catalog and `reviews/`
-for exact evidence. “Not verified” means no supported release is declared for that
-platform; a universal filename alone does not establish support. No Windows ARM64
-or Linux ARM64 bundles are currently provided.
-
-Slack 1.1.0-laplace.1 is released and supported on all four listed targets,
-with explicit owner release approval on October 29, 2026. Linux executable startup
-and a local browser fixture are checked; real Slack sign-in remains unverified,
-and Windows/macOS packages have not been executed on native machines. Slack needs
-Windows 10/11, macOS 14+, Ubuntu 22.04/24.04/26.04 or Debian 12/13. Linux also needs
-Chromium's OS shared libraries. A graphical desktop and internet access are
-required for first sign-in. Download the suffix matching your OS and CPU from
-[the catalog](catalog/local-mcp-bundles.json) or the [Slack 1.1.0-laplace.1 release](https://github.com/acriver3/laplace-mcp-library/releases/tag/slack-mcp-server-v1.1.0-laplace.1).
-
-## Install a historical MCPB through Laplace Local
-
-1. Find the connector in [the catalog](catalog/local-mcp-bundles.json) and download
-   its MCPB using the catalog download URL or the links in
-   [Releases](https://github.com/acriver3/laplace-mcp-library/releases).
-   Check its exact SHA-256 and byte length against the catalog before extraction
-   or execution. Release notes distinguish published bundles from candidates.
-2. Extract into a persistent, versioned local folder. Read the connector README
-   and `manifest.json` for prerequisites, local configuration and sign-in.
-   MCPB is a ZIP archive. It does not guarantee that runtimes or browsers are embedded.
-3. Reuse or set up Laplace Local using your Laplace account's setup page. Resolve
-   manifest placeholders to local absolute paths and your chosen settings; write
-   the resulting command, args and env into a local JSON `mcpServers` entry.
-   Keep credentials and browser sessions outside this repository and bundle folders.
-4. Complete sign-in/MFA locally, then run
-   `laplace-local attach <config.json> --select <server-id> --confirm`.
-   Register only Laplace Local with your AI client. Preserve existing connections.
-5. Verify startup, tool discovery and a harmless authenticated read. Do not send
-   messages, connection requests or mail, change calendars, or create EMS bookings
-   as part of setup. Report failures without substituting unverified packages.
-
-Canvas needs your institution URL and download folder; verify `canvas_whoami` and
-`canvas_list_courses`. LinkedIn uses Python 3.13 and `uv sync --locked --no-dev`;
-verify `get_my_profile`. EMS needs Node 24 and Chrome/Edge; verify
-`ems_session_status` and `ems_list_templates`. Outlook needs Node and Chrome/Edge;
-verify `outlook_status` and `outlook_list_folders`. Follow each manifest's launch
-configuration rather than registering an upstream server directly with a client.
-
-Slack now includes its Node runtime, Go server and Node dependencies. Extract the
-matching platform MCPB and run `./slack login --workspace https://your-team.slack.com`
-on macOS/Linux or `.\slack.cmd login --workspace https://your-team.slack.com` on
-Windows. First login automatically downloads the matching Chromium browser and
-opens Slack sign-in/MFA; no Go, npm or compilation step is needed. Then use the
-manifest to attach through Laplace Local. The bundle is not notarized; normal OS
-security prompts may apply. See the connector README for executable permissions
-and Linux requirements. Only dedicated Patchright browser sign-in is supported;
-OAuth and bot tokens remain disabled. Verify `channels_list` with writes disabled.
-
-## Source and releases
+## Source and licenses
 
 `connectors/` contains source, manifests, lockfiles, licenses and provenance.
-`bundles/<connector-id>/<version>/` stores the actual MCPB files in Git. Release
-notes link to those files at immutable version tags; they are not uploaded release
-assets. This keeps both source and bundles accessible through this repository.
-`catalog/local-mcp-bundles.json` records immutable versions, artifact checksums,
-sizes, download URLs and acceptance evidence. The initial Canvas, LinkedIn, EMS
-and Outlook releases are byte-for-byte mirrors of the existing Laplace releases;
-their original upstream provenance and acceptance limitations are preserved.
-Their source trees were extracted from those verified bundles, excluding installed
-`node_modules`; omitted development files were restored from the pinned upstream
-commits. Compiled files already present in the bundles are retained.
-Historical review notes are in `reviews/`; references to the Laplace monorepo
-in those records describe the original release process.
+Connector sources for Canvas, LinkedIn and Outlook track pinned upstream commits
+with Laplace patches recorded in the catalog; Yale SOM EMS is first-party code whose
+canonical source is `connectors/yale-som-ems-mcp`. Historical review notes are in
+`reviews/`; references to the Laplace monorepo in those records describe the
+original release process.
 
 Each connector retains its own license and attribution. The root MIT license
 covers the inherited Slack fork; it does not override connector licenses. In
 particular, Yale SOM EMS is first-party proprietary code with its own LICENSE.
-Third-party dependencies retain their licenses. No credentials or browser profiles
-are shipped.
-
-## Build a new candidate
-
-Use Node 24+, Python 3 and the connector's declared toolchain. Commit source changes
-first: builds use `git archive HEAD:connectors/<id>` so unrelated working files
-and local sessions are not packaged.
-
-```sh
-npm ci --ignore-scripts
-npm run build:bundle -- canvas-session-mcp 0.1.0-laplace.2
-npm run verify
-```
-
-The builder uses locked inputs and MCPB 2.1.2, validates manifests and normalizes
-archive timestamps and ordering. Canvas/EMS/Outlook install locked dependencies;
-LinkedIn remains a source distribution with documented local prerequisites.
-Slack uses `npm run build:slack -- <new-version>` with the pinned Go toolchain
-(`GO_BINARY` can select its executable) and checksum-verified Node archives.
-That command builds all four platform packages from committed source, retaining
-runtime licenses and dependency notices. `scripts/slack-runtime-lock.json` records
-exact runtime versions and checksums.
-Outputs are ignored under `.artifacts/`; staging is under `.build/`. A build is a
-candidate, not release acceptance. New bytes require a new version. Update the
-catalog with the resulting SHA-256/size and actual platform evidence before
-publishing; never overwrite a release asset. Native dependencies require
-platform-specific recipes instead of a universal archive. No GitHub Actions are
-configured by this library.
-
-`npm run verify` checks every cataloged archive in `bundles/`, its checksum,
-size, safe ZIP paths and manifest identity. A normal Git clone includes the
-archives; missing archives are reported as errors.
-Authenticated acceptance must be recorded against each exact archive and platform;
-existing evidence does not carry over to rebuilt bytes.
-
-After pushing the reviewed source commit, maintainers can run
-`npm run publish:releases` with GitHub repository write access. This verifies every
-cataloged archive, creates missing release notes without replacing tags, and
-downloads the tagged repository files again to verify their exact bytes. Slack 1.1.0-laplace.1 is a regular release; its approval and verification evidence are recorded separately in the catalog.
+Third-party dependencies retain their licenses; Slack's platform packages carry
+the Go and Go module notices.
 
 ## Connector setup links
 
-Use `https://connect.laplaceop.com/local-mcp/setup/<catalog-id>` for the current public setup instructions. For example: “Please set up LinkedIn [Background Browser] with Laplace using these instructions: https://connect.laplaceop.com/local-mcp/setup/linkedin-mcp-server”. The web and Desktop catalogs use this same one-sentence format. Existing connector READMEs and bundle manifests describe their versioned implementations.
+Use `https://connect.laplaceop.com/local-mcp/setup/<catalog-id>` for the current public setup instructions. For example: “Please set up LinkedIn [Background Browser] with Laplace using these instructions: https://connect.laplaceop.com/local-mcp/setup/linkedin-mcp-server”. The web and Desktop catalogs use this same one-sentence format. Connector READMEs and manifests describe their versioned implementations.
 
 The browser-runtime candidate contains Outlook and full Slack adapters, the shared extension and native installer, and Desktop/CLI approval and migration primitives. See [runtime release gates](browser-runtime/README.md) and its artifact-specific evidence before activation. LinkedIn retains its original implementation.
