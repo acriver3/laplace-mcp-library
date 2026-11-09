@@ -82,8 +82,26 @@ installation are enabled for the supported platforms.
 
 macOS Intel and Linux remain unverified and are excluded from catalog support.
 Adding Intel requires real student-account login, direct/wrapped reads and a
-user-approved disposable create/edit/cancel sequence against this exact
-checksum. Record OS/architecture, browser, Node/wrapper
+user-approved disposable create/edit/cancel sequence against the published
+version. Record OS/architecture, browser, Node/wrapper
 versions, timestamp and redacted launch configuration for each platform; never
 infer a platform's success from fixtures or another platform's run. Existing
 checksum and immutable publication controls in local-mcp-bundles.md apply.
+
+## 0.1.1 (npm)
+
+Yale SOM EMS now ships on npm as `@withlaplace/yale-som-ems-mcp`, and
+`connectors/yale-som-ems-mcp` in this library is its canonical source; the
+MCPB-only `LAPLACE-BUNDLE.md` and `LAPLACE-PROVENANCE.json` were removed.
+Version 0.1.1 is a performance release with unchanged tools and permissions:
+
+- Template rules are read once per browser session and cached, only for the
+  template in use.
+- Searches and previews no longer reopen every template's About dialog, so
+  empty dialogs no longer add a wait to each search or preview.
+- Booking previews skip one page load (an extra `Default.aspx` navigation).
+
+Verified by the package tests and the offline browser fixture, which asserts
+the rule cache and timing. A real-portal check against Yale SOM EMS is pending
+and will be performed by the user. The catalog's Windows x64 and macOS Apple
+Silicon acceptance records refer to 0.1.0.
