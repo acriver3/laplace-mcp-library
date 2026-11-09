@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "yale-som-ems-mcp",
   "display_name": "Yale SOM EMS for Laplace Local",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Find student rooms and preview one-time booking changes using your dedicated Yale SOM EMS browser login.",
   "author": {
     "name": "Laplace",

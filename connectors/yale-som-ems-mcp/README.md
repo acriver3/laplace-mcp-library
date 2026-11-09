@@ -1,18 +1,22 @@
 # Yale SOM EMS Student MCP
 
 Local stdio MCP for Yale SOM student breakout rooms, interview rooms, and Fit
-for Thought. Version 0.1.0 is a candidate: authentication, booking changes,
-and Laplace Local acceptance must pass on every declared platform against the
-exact artifact checksum before catalog installation is enabled. The inspected
-portal was EMS Web App v226.2.
+for Thought. It is published to npm as `@withlaplace/yale-som-ems-mcp`; Laplace
+Desktop installs an exact published version with npm's integrity checks. The
+inspected portal was EMS Web App v226.2.
 
 ## Setup
 
-Use Node 24 and installed Google Chrome or Microsoft Edge. A packaged bundle
-includes compiled code and production dependencies; do not reinstall them.
-For development only, run `npm ci --ignore-scripts --workspaces=false` and
+Use Node 24 and installed Google Chrome or Microsoft Edge. Laplace Desktop
+installs the package for you. To run it directly, install an exact version:
+
+```sh
+npm install --ignore-scripts @withlaplace/yale-som-ems-mcp@0.1.1
+```
+
+For development, run `npm ci --ignore-scripts --workspaces=false` and
 `npm run build` inside this package. The independent npm lockfile supports
-building this subtree without other Laplace packages or credentials.
+building this subtree without other packages or credentials.
 
 ```sh
 node dist/cli.js login --profile-dir /absolute/path/to/dedicated/ems/profile --browser chrome
@@ -28,8 +32,7 @@ Do not share profiles across operating systems or open one simultaneously in
 multiple clients. Normal shutdown releases ownership; after a process crash,
 stop its remaining browser before using `status --release-stale-lock`.
 
-Resolve the bundle's manifest locally, then attach only its `yale-som-ems` stdio
-configuration through Laplace Local. Setup checks `ems_session_status` and
+Attach the `serve` command through Laplace Local. Setup checks `ems_session_status` and
 `ems_list_templates` directly and through the wrapper. It does not test writes.
 
 ## Tools
@@ -91,7 +94,7 @@ fixture; every request is intercepted and it never contacts EMS or Yale SSO.
 It exercises discovery, searches, previews, creation, updating and cancellation.
 Synthetic tests do not establish real account or platform acceptance.
 
-Sessions, cookies and recovery files stay outside the bundle; protocol output
+Sessions, cookies and recovery files stay outside the package; protocol output
 uses stdout and diagnostics use stderr. Laplace Local's existing privacy and
 permission controls continue to apply. This is an independent Laplace
 integration, not a Yale or Accruent product.

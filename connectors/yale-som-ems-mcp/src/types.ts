@@ -102,7 +102,8 @@ export type Preview = {
 	operation: Change["operation"];
 	account: string;
 	timezone: string;
-	template?: Template;
+	/** Update and cancel previews identify the template without re-reading its rules. */
+	template?: Template | Pick<Template, "id" | "name" | "supported">;
 	room?: Room;
 	start?: string;
 	end?: string;

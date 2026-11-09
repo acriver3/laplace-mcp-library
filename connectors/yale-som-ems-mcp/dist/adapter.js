@@ -7,11 +7,13 @@ const normal = (s) => s.replace(/\s+/g, " ").trim();
 export class BrowserAdapter {
     browser;
     urls = new Map();
+    rules = new Map();
     selected;
     constructor(browser) {
         this.browser = browser;
     }
     close() {
+        this.rules.clear();
         return this.browser.close();
     }
     async identity() {
@@ -29,7 +31,8 @@ export class BrowserAdapter {
         }
         catch (error) {
             // Release the profile so the separate headed login CLI can acquire it.
-            await this.browser.close();
+            // Another account may sign in next, so drop cached template rules too.
+            await this.close();
             throw error;
         }
         await this.settled(page);
@@ -58,36 +61,49 @@ export class BrowserAdapter {
             url: el.getAttribute("data-navigateurl") || "",
         })));
     }
-    async templates(includeFields = true) {
+    // Template rules come from each template's About dialog. Empty dialogs cost a
+    // two-second wait, so read each template's rules at most once per browser session.
+    async rulesFor(page, id) {
+        const cached = this.rules.get(id);
+        if (cached !== undefined)
+            return cached;
+        await page.locator(`#templates-grid button[data-templateid="${id}"]`).click();
+        await page.locator("#template-modal").waitFor({ state: "visible" });
+        await this.settled(page);
+        const body = page.locator("#template-modal .modal-body");
+        const loaded = await body.waitFor({ state: "visible", timeout: 2000 }).then(() => true, () => false);
+        const rules = loaded
+            ? normal(await body.innerText())
+            : "EMS did not expose template information. The reservation form enforces booking rules; inspect EMS if rule details are needed.";
+        const close = page.locator('#template-modal [data-dismiss="modal"]');
+        if (await close.count())
+            await close.first().click();
+        else
+            await page.locator("#template-modal").press("Escape");
+        await page.locator("#template-modal").waitFor({ state: "hidden" });
+        this.rules.set(id, rules);
+        return rules;
+    }
+    /** Template identities and support, without opening any About dialog. */
+    async templateSummaries() {
         const page = await this.goto("RoomRequest.aspx");
         const rows = await this.templateRows(page);
-        const result = [];
-        for (const row of rows) {
-            let rules = "";
-            const button = page.locator(`#templates-grid button[data-templateid="${row.id}"]`);
-            await button.click();
-            await page.locator("#template-modal").waitFor({ state: "visible" });
-            await this.settled(page);
-            const body = page.locator("#template-modal .modal-body");
-            const loaded = await body.waitFor({ state: "visible", timeout: 2000 }).then(() => true, () => false);
-            rules = loaded
-                ? normal(await body.innerText())
-                : "EMS did not expose template information. The reservation form enforces booking rules; inspect EMS if rule details are needed.";
-            const close = page.locator('#template-modal [data-dismiss="modal"]');
-            if (await close.count())
-                await close.first().click();
-            else
-                await page.locator("#template-modal").press("Escape");
-            await page.locator("#template-modal").waitFor({ state: "hidden" });
-            result.push({
+        return {
+            page,
+            rows,
+            templates: rows.map((row) => ({
                 id: row.id,
                 name: row.name,
                 supported: SUPPORTED_TEMPLATES.includes(row.name),
-                rules,
-                required_fields: [],
-            });
-        }
-        for (const template of result.filter((t) => t.supported && includeFields)) {
+            })),
+        };
+    }
+    async templates() {
+        const { page, rows, templates } = await this.templateSummaries();
+        const result = [];
+        for (const template of templates)
+            result.push({ ...template, rules: await this.rulesFor(page, template.id), required_fields: [] });
+        for (const template of result.filter((t) => t.supported)) {
             await this.goto(rows.find((row) => row.id === template.id).url);
             await page.locator("#booking-date-input").waitFor();
             template.required_fields = (await this.fields(page, true)).filter((f) => f.required);
@@ -95,14 +111,18 @@ export class BrowserAdapter {
         return result;
     }
     async openTemplate(id) {
-        const templates = await this.templates(false);
-        const template = templates.find((t) => t.id === id);
-        if (!template || !template.supported)
+        const { page, rows, templates } = await this.templateSummaries();
+        const summary = templates.find((t) => t.id === id);
+        if (!summary || !summary.supported)
             throw new EmsError("unsupported_template", "Choose one of the student templates returned by ems_list_templates.");
-        const page = await this.browser.page();
-        const row = (await this.templateRows(page)).find((r) => r.id === id);
+        const row = rows.find((r) => r.id === id);
         if (!row?.url)
             throw new EmsError("page_changed", "EMS did not provide a template navigation link.");
+        const template = {
+            ...summary,
+            rules: await this.rulesFor(page, id),
+            required_fields: [],
+        };
         await this.goto(row.url);
         await page.locator("#booking-date-input").waitFor();
         template.required_fields = (await this.fields(page, true)).filter((f) => f.required);
@@ -459,7 +479,12 @@ export class BrowserAdapter {
     }
     async prepare(change) {
         this.selected = undefined;
-        const identity = await this.identity();
+        // Every later navigation re-checks the session, so an EMS page that is already
+        // open can identify the account without an extra Default.aspx load.
+        const current = await this.browser.page();
+        const identity = current.url().startsWith(EMS_BASE)
+            ? await this.browser.identity()
+            : await this.identity();
         if (change.operation === "create") {
             const reservationIds = (await this.reservations()).map((r) => r.reservation_id);
             const input = searchSchemaForChange(change);
@@ -515,7 +540,7 @@ export class BrowserAdapter {
                 },
             };
         }
-        const templates = await this.templates(false);
+        const { templates } = await this.templateSummaries();
         const requestedTemplate = change.operation === "update"
             ? templates.find((t) => t.id === change.template_id && t.supported)
             : undefined;

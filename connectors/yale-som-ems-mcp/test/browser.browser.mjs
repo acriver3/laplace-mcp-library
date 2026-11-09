@@ -39,6 +39,7 @@ void test("browser adapter exercises discovery, empty/conflicting searches and c
 	const browser = new EmsBrowser(join(dir, "profile"), "chrome");
 	const adapter = new BrowserAdapter(browser);
 	let writes = 0,
+		aboutOpens = 0,
 		state = null,
 		empty = false,
 		wrongInterval = false,
@@ -73,6 +74,10 @@ void test("browser adapter exercises discovery, empty/conflicting searches and c
 			if (url.pathname.endsWith("/GetAvailabilityList")) {
 				return route.fulfill({ json: { d: JSON.stringify({ Success: true, Availability: [] }) } });
 			}
+			if (url.pathname.endsWith("/FixtureAbout")) {
+				aboutOpens++;
+				return route.fulfill({ json: { ok: true } });
+			}
 			if (url.pathname.endsWith("/PopulateReservationList"))
 				return route.fulfill({ json: { d: "[]" } });
 			if (url.pathname.endsWith("/FixtureSubmit")) {
@@ -94,7 +99,7 @@ void test("browser adapter exercises discovery, empty/conflicting searches and c
 					? '<button id="usernameid">Welcome, Guest.</button><script>setTimeout(()=>document.querySelector("#usernameid").textContent="Test Student",80)</script>'
 					: header;
 			if (url.pathname.endsWith("/RoomRequest.aspx") && !url.search) {
-				html += `<div id="templates-grid">${names.map((n, i) => `<button data-templateid="${ids[i]}" data-navigateurl="RoomRequest.aspx?data=${ids[i]}" aria-label="About The &quot;${n}&quot; Template" onclick="document.querySelector('#template-modal').hidden=false">About</button>`).join("")}</div><div id="template-modal" style="min-height:1px;min-width:1px" tabindex="-1" hidden onkeydown="if(event.key==='Escape')this.hidden=true">${emptyInfo ? "" : '<div class="modal-body">Fixture rule: one-time bookings, maximum three hours.</div><button data-dismiss="modal" onclick="this.parentElement.hidden=true">Close</button>'}</div>`;
+				html += `<div id="templates-grid">${names.map((n, i) => `<button data-templateid="${ids[i]}" data-navigateurl="RoomRequest.aspx?data=${ids[i]}" aria-label="About The &quot;${n}&quot; Template" onclick="document.querySelector('#template-modal').hidden=false;fetch('FixtureAbout',{method:'POST'})">About</button>`).join("")}</div><div id="template-modal" style="min-height:1px;min-width:1px" tabindex="-1" hidden onkeydown="if(event.key==='Escape')this.hidden=true">${emptyInfo ? "" : '<div class="modal-body">Fixture rule: one-time bookings, maximum three hours.</div><button data-dismiss="modal" onclick="this.parentElement.hidden=true">Close</button>'}</div>`;
 			} else if (url.pathname.endsWith("/RoomRequest.aspx")) {
 				const editing = url.searchParams.get("data") === "edit";
 				html += `<div id="date-time-collapse"><input id="booking-date-input"><div id="booking-start"><input id="start-time-input" value="8:30 AM"><button class="input-group-addon">Edit booking start time</button></div><div id="booking-end"><input id="end-time-input" value="9:30 AM"><button class="input-group-addon">Edit booking end time</button></div><select id="timeZoneDrop" ${editing ? "disabled" : ""}><option>Eastern Time</option>${editing ? "" : "<option selected>UTC</option>"}</select><button onclick="document.querySelector('#search-room-collapse').hidden=false">Let Me Search For A Room</button><section id="search-room-collapse" hidden><input id="Number of People-input-box" type="number"></section><button id="search">Search</button></div>${clockPicker}
@@ -219,8 +224,25 @@ void test("browser adapter exercises discovery, empty/conflicting searches and c
 		assert.equal(writes, 3);
 		assert.equal(cancelled.reservation.bookings[0].status, "Cancelled");
 		assert.equal(cancelled.reservation.bookings[1].status, "Confirmed");
+		// Template rules are read once per session: searches and previews above
+		// opened each About dialog at most once.
+		assert.equal(aboutOpens, 3);
+		await adapter.templates();
+		await adapter.search(search);
+		assert.equal(aboutOpens, 3);
+		// Empty About dialogs wait two seconds each; a session pays that only once.
 		emptyInfo = true;
-		assert.ok((await adapter.templates()).every((t) => t.rules.includes("did not expose")));
+		const fresh = new BrowserAdapter(browser);
+		const before = aboutOpens;
+		const first = await fresh.search(search);
+		assert.ok(first.template.rules.includes("did not expose"));
+		assert.equal(aboutOpens, before + 1);
+		assert.ok((await fresh.templates()).every((t) => t.rules.includes("did not expose")));
+		assert.equal(aboutOpens, before + 3);
+		const started = performance.now();
+		assert.ok((await fresh.search(search)).template.rules.includes("did not expose"));
+		assert.equal(aboutOpens, before + 3);
+		assert.ok(performance.now() - started < 1500, "a cached search must not wait on About dialogs");
 		assert.equal(writes, 3);
 	} finally {
 		await adapter.close();

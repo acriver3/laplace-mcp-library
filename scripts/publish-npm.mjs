@@ -19,6 +19,7 @@ const [id, version] = args.filter((arg, index) => !arg.startsWith("--") && args[
 const connectors = {
 	"msoutlook-mcp": { build: ["build"], test: true, workspaces: true },
 	"canvas-session-mcp": { build: [], test: true, workspaces: false },
+	"yale-som-ems-mcp": { build: ["build"], test: true, workspaces: true },
 };
 assert(Object.hasOwn(connectors, id ?? ""), `Choose one of: ${Object.keys(connectors).join(", ")}`);
 assert(/^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/.test(version ?? ""), "Supply an exact version");
