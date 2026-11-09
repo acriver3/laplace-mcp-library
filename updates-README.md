@@ -1,31 +1,33 @@
-# Independent managed connector releases
+# Managed connector update feed (frozen)
 
-Desktop and Laplace Local consume `updates/stable.json` and `updates/stable.json.sig` from this repository. This is separate from Desktop releases. No feed is published or platform newly qualified by this implementation.
+This feed is frozen. Connectors now ship on npm as `@withlaplace/<id>` packages
+(see "Release a connector" in [README.md](README.md)), and new connector versions
+are no longer added here. `updates/stable.json`, `updates/stable.json.sig`,
+`updates/acceptance/` and `updates/artifacts/` stay exactly as they are because
+already-installed Desktop and Laplace Local versions still read them: do not add,
+edit, re-sign, move or delete any of these files. The MCPB build and release
+scripts that produced them (`build-bundle.mjs`, `release-connector.mjs`,
+`build-slack-ready.py`, `bundle-archive.py`, `publish-releases.py`) have been
+retired.
 
-Prepare a reviewed unpacked bundle with `node scripts/prepare-update-artifact.mjs <source> <new-directory> <inventory.json>`. The destination must be a new directory with an existing parent. Commit that immutable artifact tree first. A release entry references that exact Git commit, relative directory, and inventory; clients never execute remote installer commands. Keep all historical entries in each subsequent index. Increment the index sequence. Use separate entries for platform-specific artifacts, including the same version on different platforms. Never replace bytes for an existing connector/mode/version/platform.
+## What installed clients read
 
-The version-1 catalog has `schemaVersion`, increasing `sequence`, and `releases`. Each release has `id`, semver `version`, increasing per-connector `sequence`, `mode` (`tethered` or `background-browser`), `channel: "stable"`, `platforms`, `minDesktop`, `minCli`, `permissionRevision`, `configurationRevision`, `qualified: true`, `qualificationSha256`, immutable `commit`, `directory`, and `files` (`path`, `size`, `sha256`, `executable`). The installed launch recipe remains local. Catalogs cannot change browser modes, commands, accounts, credentials, or configuration. A new permission/configuration revision remains pending for explicit setup.
+Desktop and Laplace Local consume `updates/stable.json` and its detached signature
+`updates/stable.json.sig`, verified against the pinned Laplace Ed25519 key
+(`scripts/pinned-update-key.txt`). The version-1 catalog has `schemaVersion`, an
+increasing `sequence`, and `releases`. Each release names a connector `id`,
+`version`, per-connector `sequence`, `mode` (`tethered` or `background-browser`),
+`channel`, `platforms`, `minDesktop`, `minCli`, revisions, `qualified`,
+`qualificationSha256` (a record in `updates/acceptance/`), the Git `commit`, the
+artifact `directory` under `updates/artifacts/`, and the `files` inventory clients
+check before installing. Large executables may be stored as `.gz` transport files
+with a `compressed` receipt. Catalogs cannot change browser modes, commands,
+accounts, credentials or configuration, and automatic execution stays behind
+`LAPLACE_AUTOMATIC_UPDATES_V1`, explicit opt-in and the client's other safeguards.
 
-## One-command release
+## Remaining tools
 
-`npm run release:connector -- <connector-id> <new-version> --accept "<verbatim owner statement>"` performs the steps below and stops with an explanation on any failure. Re-running the same command resumes from recorded state in `.build/release/`.
-
-1. Checks a clean tree, that HEAD contains `origin/main`, and that the version is new.
-2. Builds the MCPB with `scripts/build-bundle.mjs` (running the connector's tests) and unpacks it.
-3. Prepares `updates/artifacts/<id>/<mode>/<version>/universal`, stores any file Git would rewrite (for example CRLF files under a connector's own `.gitattributes`) as `.gz` transport with a `compressed` receipt, commits the tree with `node_modules`, and verifies every committed blob against the inventory.
-4. Drafts one feed entry per platform from the previous release, bumping the index and per-connector sequences. Revisions are inherited; a changed manifest `server` block requires `--configuration-revision`, and `--permission-revision` / `--session-revision` are available when browser permissions or sessions change.
-5. Writes one hash-named acceptance record per platform (`result: "accepted"`, `nativeResults: "not-attested"`), or uses matching native records from `--evidence-dir`.
-6. Signs with `--key`, `$LAPLACE_UPDATE_SIGNING_KEY_FILE`, or the Doppler `laplace/prd` key (fetched into a temporary 0600 file that is always deleted; use `--doppler-scope <dir>` if your Doppler login is scoped elsewhere). The key must match `scripts/pinned-update-key.txt`, and the signature is verified after signing.
-7. Installs the exact signed bytes, runs `npm run verify`, commits with the acceptance statement quoted, and prints the push and published-file checks. Pass `--push` to push to `origin/main`.
-
-`--dry-run` does steps 1–6 into `.build/release/` without committing and removes its temporary artifact tree. Use `--platforms` to release a subset and `--mode` for connectors published in both modes. Test the helpers with `node --test scripts/release-lib.test.mjs`.
-
-Native qualification evidence is a JSON document named by its SHA-256 in a reviewed evidence directory. It contains `schemaVersion: 1`, `target`, `distribution` (the browser mode), `commit`, `artifactSha256` (SHA-256 of JSON.stringify(files)), `reviewer`, ISO `completedAt`, `result: "passed"`, and `checks`. Every check exported by `scripts/update-acceptance.mjs` must be `"passed"`. Each platform needs its own evidence and catalog entry. Do not convert absent, simulated, or cross-platform results into a pass.
-
-Sign locally using `node scripts/sign-update-catalog.mjs <catalog.json> <private-key.pem> <new-output.json> <evidence-directory>`. It verifies the native evidence and artifact inventory before signing. Keep signing keys outside the checkout. Publish the immutable files and signature through the existing reviewed local release process; no GitHub Workflow is added. The clients pin the existing Laplace Ed25519 public key.
-
-Automatic execution additionally requires `LAPLACE_AUTOMATIC_UPDATES_V1=true`, explicit user opt-in, compatible host/runtime, no pin, computer inactivity, and exclusive maintenance. Keep the production flag absent until integrated acceptance passes. Shared browser-runtime maintenance coordination lives in `browser-runtime/src/update-coordination.ts`; Desktop and CLI consume reviewed copies. A connector update never installs a browser extension or replaces the shared native host.
-
-Explicit release-owner acceptance in place of native evidence follows the Desktop source-release policy. Record `result: "accepted"`, `localValidation: "passed"`, and `userAcceptance` containing the verbatim statement, UTC `acceptedAt`, and `nativeResults: "not-attested"`; omit `checks`. Exact commit, inventory hash, target, mode, reviewer and completion date remain mandatory. Publish the acceptance record with the catalog and label it as acceptance, not native test results. General publication authorization alone does not imply this exception.
-
-Large executable files can use `compressed: {size, sha256}` in their file receipt. The transport path is the original path plus `.gz`; the original hash and size still describe the installed executable. Preparation compresses files above 64 MiB to fit GitHub's file limit. Signing and clients verify both layers, and clients bound decompression by the installed size. This requires Desktop 0.1.28 / Local CLI 0.1.5 or later.
+`scripts/sign-update-catalog.mjs`, `scripts/update-acceptance.mjs` and
+`scripts/prepare-update-artifact.mjs` are kept only so the existing signed feed and
+its acceptance records can still be checked and understood; their tests run with
+`node --test scripts/update-release.test.mjs`.

@@ -2,17 +2,10 @@
   "name": "laplace-mcp-library",
   "version": "1.0.0",
   "private": true,
-  "description": "Laplace-maintained local MCP sources and MCPB bundles",
+  "description": "Laplace-maintained local MCP sources, published to npm as @withlaplace connector packages",
   "scripts": {
-    "build:bundle": "node scripts/build-bundle.mjs",
     "verify": "node browser-runtime/scripts/verify-source.mjs && python3 scripts/verify.py",
-    "publish:releases": "python3 scripts/publish-releases.py",
-    "build:slack": "python3 scripts/build-slack-ready.py",
-    "release:connector": "node scripts/release-connector.mjs",
     "publish:npm": "node scripts/publish-npm.mjs"
-  },
-  "devDependencies": {
-    "@anthropic-ai/mcpb": "2.1.2"
   },
   "engines": {
     "node": ">=24"
