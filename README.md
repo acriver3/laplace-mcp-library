@@ -31,7 +31,7 @@ These pages cover Desktop and CLI installation, existing-connection reuse, authe
 | --- | --- | --- | --- | --- |
 | [Canvas [Background Browser]](connectors/canvas-session-mcp/README.md) | `@withlaplace/canvas-session-mcp` | 0.1.0-laplace.2 | Windows x64, macOS Intel, macOS Apple Silicon | Node; Chrome/Edge |
 | [LinkedIn [Background Browser]](connectors/linkedin-mcp-server/README.md) | `@withlaplace/linkedin-mcp-server` | 4.26.2-laplace.2 | Windows x64, macOS Intel, macOS Apple Silicon | Node launcher running the locked Python project with uv (Python 3.13) |
-| [Yale SOM EMS [Background Browser]](connectors/yale-som-ems-mcp/README.md) | `@withlaplace/yale-som-ems-mcp` | 0.1.1 | Windows x64, macOS Apple Silicon | Node 24; Chrome/Edge |
+| [Yale SOM EMS [Background Browser]](connectors/yale-som-ems-mcp/README.md) | `@withlaplace/yale-som-ems-mcp` | 0.1.2 | Windows x64, macOS Apple Silicon | Node 24; Chrome/Edge |
 | [Outlook](connectors/msoutlook-mcp/README.md) | `@withlaplace/msoutlook-mcp` | 0.5.0-laplace.2 | Windows x64, macOS Intel, macOS Apple Silicon | Node; Chrome/Edge |
 | [Slack](connectors/slack-mcp-server/README.md) | `@withlaplace/slack-mcp-server` | 1.1.0-laplace.2 | Windows x64, macOS Intel, macOS Apple Silicon, Linux x64 | Node launcher with Patchright; Go server from `@withlaplace/slack-mcp-server-<os>-<cpu>` |
 

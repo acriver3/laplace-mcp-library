@@ -105,3 +105,9 @@ Verified by the package tests and the offline browser fixture, which asserts
 the rule cache and timing. A real-portal check against Yale SOM EMS is pending
 and will be performed by the user. The catalog's Windows x64 and macOS Apple
 Silicon acceptance records refer to 0.1.0.
+
+## 0.1.2 (npm)
+
+Version 0.1.2 relicenses the first-party connector source under the MIT
+License (previously `UNLICENSED`). Code, tools and permissions are unchanged
+from 0.1.1. Third-party dependencies keep their own licenses.

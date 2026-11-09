@@ -11,7 +11,7 @@ Use Node 24 and installed Google Chrome or Microsoft Edge. Laplace Desktop
 installs the package for you. To run it directly, install an exact version:
 
 ```sh
-npm install --ignore-scripts @withlaplace/yale-som-ems-mcp@0.1.1
+npm install --ignore-scripts @withlaplace/yale-som-ems-mcp@0.1.2
 ```
 
 For development, run `npm ci --ignore-scripts --workspaces=false` and

@@ -170,7 +170,7 @@
       "Preview and confirm individual booking changes"
     ],
     "repository": "https://github.com/acriver3/laplace-mcp-library",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "npm": {
       "package": "@withlaplace/yale-som-ems-mcp",
       "distTag": "latest",
@@ -203,7 +203,7 @@
         "evidence": "User-reported Apple Silicon acceptance in this implementation session for the 0.1.0 candidate, including login, reads, create/edit/cancel and Laplace Local. Report timestamp; the agent did not run these macOS checks. See docs/yale-som-ems-mcp-review.md."
       }
     ],
-    "license": "UNLICENSED",
+    "license": "MIT",
     "recipe": "yale-som-ems",
     "patches": [],
     "reviewedAt": "2026-10-09",
@@ -215,7 +215,8 @@
       "Uses a dedicated local Chrome/Edge profile and interactive Yale SSO/MFA. Never imports your everyday browser cookies.",
       "Preview and confirm one-time individual booking changes. Pending approval is reported as pending; uncertain writes require local reconciliation and are never replayed.",
       "Published for Windows x64 with agent-verified acceptance and macOS Apple Silicon with user-reported acceptance, both for version 0.1.0. macOS Intel and Linux remain unverified and are excluded from catalog support.",
-      "Version 0.1.1 caches template rules per browser session, no longer reopens About dialogs on every search or preview, and skips a page load per preview. Package tests and the offline browser fixture verify it; a real-portal check is pending."
+      "Version 0.1.1 caches template rules per browser session, no longer reopens About dialogs on every search or preview, and skips a page load per preview. Package tests and the offline browser fixture verify it; a real-portal check is pending.",
+      "Version 0.1.2 is licensed under MIT; code is unchanged from 0.1.1."
     ],
     "prerequisites": [
       "Laplace Local and its included Node 24 runtime",
