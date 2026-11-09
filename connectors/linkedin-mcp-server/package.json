@@ -1,0 +1,30 @@
+{
+  "name": "linkedin-mcp-server",
+  "version": "4.26.2",
+  "description": "LinkedIn MCP server (stickerdaniel/linkedin-mcp-server) packaged for Laplace: a Node launcher that runs the locked Python project with uv.",
+  "license": "Apache-2.0",
+  "author": "Daniel Sticker",
+  "type": "module",
+  "bin": {
+    "linkedin-mcp-server": "bin/linkedin-mcp-server.mjs"
+  },
+  "files": [
+    "bin/linkedin-mcp-server.mjs",
+    "linkedin_mcp_server",
+    "pyproject.toml",
+    "uv.lock",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "test": "node --test bin/launcher.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stickerdaniel/linkedin-mcp-server.git"
+  }
+}

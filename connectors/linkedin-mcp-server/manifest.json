@@ -2,7 +2,7 @@
   "manifest_version": "0.4",
   "name": "linkedin-mcp-server",
   "display_name": "LinkedIn for Laplace Local",
-  "version": "4.26.2-laplace.1",
+  "version": "4.26.2-laplace.2",
   "description": "Read profiles, companies, jobs and conversations using a dedicated local LinkedIn browser session.",
   "author": {
     "name": "Daniel Sticker",
