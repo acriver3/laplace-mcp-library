@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "msoutlook-mcp",
   "display_name": "Outlook for Laplace Local",
-  "version": "0.5.0-laplace.1",
+  "version": "0.5.0-laplace.2",
   "description": "Read and manage Outlook mail, calendars, contacts and directory profiles using a local browser sign-in.",
   "author": {
     "name": "Shayan Khaksar",
