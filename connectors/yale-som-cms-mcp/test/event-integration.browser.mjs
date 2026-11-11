@@ -92,10 +92,18 @@ async function fixture(t, options = {}) {
         "<!doctype html><main><tt-edit-registration></tt-edit-registration></main>",
       );
       await page.evaluate(installEventForm, {
-        docs: options.withFile
-          ? [{ id: "101", title: "Resume", required: true }]
-          : [],
-        confirmOnly: !options.withFile,
+        docs:
+          options.withFile || options.existing
+            ? [
+                {
+                  id: "101",
+                  title: "Resume",
+                  required: true,
+                  ...(options.existing ? { existing: [{ Id: 44, Name: "Existing Resume" }] } : {}),
+                },
+              ]
+            : [],
+        confirmOnly: !options.withFile && !options.existing,
         slot: options.slot,
       });
       await page.evaluate(() => {
@@ -106,6 +114,9 @@ async function fixture(t, options = {}) {
             documents: c.registrationDocuments.map((d) => ({
               documentTypeId: String(d.eventRegistrationDocumentTypeId),
               fileId: d.fileService.files[0]?.FileId || null,
+              ...(d.type === "existing"
+                ? { existingDocumentId: d.ExistingApplicationDocumentId }
+                : {}),
             })),
           });
           c.isRegistrationBeingSubmitted = false;
@@ -315,6 +326,51 @@ test("attendance for another event cannot verify the submitted target", async (t
   assert.equal(
     result.effects.find((effect) => effect.name === "event_register").status,
     "intended",
+  );
+  assert.equal(state.submissions.length, 1);
+});
+
+test("existing library documents keep registration partial until their association is independently verified", async (t) => {
+  const { service, request, state } = await fixture(t, { existing: true });
+  request.fields = { "document:101:type": "existing", "document:101:existing": "44" };
+  const draft = await service.prepare(request);
+  assert.deepEqual(state.submissions, []);
+  assert.deepEqual(state.uploads, []);
+  let failure;
+  await assert.rejects(service.commit(draft.draft_id, true), (error) => {
+    failure = error;
+    return error.code === "submission_partial";
+  });
+  const result = failure.details.result;
+  const attachment = result.effects.find(
+    (effect) => effect.name === "event_document_attachment:101",
+  );
+  assert.equal(attachment.status, "intended");
+  assert.equal(attachment.details.document_type_id, "101");
+  assert.equal(attachment.details.existing_document_id, "44");
+  assert.equal(
+    result.effects.find((effect) => effect.name === "event_register").status,
+    "verified",
+  );
+  assert.deepEqual(state.uploads, []);
+  assert.deepEqual(state.submissions, [
+    {
+      eventId: "123",
+      slot: null,
+      documents: [{ documentTypeId: "101", fileId: null, existingDocumentId: 44 }],
+    },
+  ]);
+  const journalIndex = state.journal.findIndex(
+    (effect) => effect.name === "event_document_attachment:101" && effect.status === "intended",
+  );
+  const submitIndex = state.journal.findIndex(
+    (effect) => effect.name === "event_register" && effect.status === "intended",
+  );
+  assert.ok(journalIndex >= 0 && journalIndex < submitIndex);
+  assert.equal((await service.recoveryStatus()).blocked, true);
+  await assert.rejects(
+    service.commit(draft.draft_id, true),
+    (error) => error.code === "draft_expired",
   );
   assert.equal(state.submissions.length, 1);
 });

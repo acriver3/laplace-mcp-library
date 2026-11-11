@@ -941,6 +941,14 @@ export async function fillEventWorkflow(
     );
   for (const d of workflow.documents) {
     const p = prefix(d.id);
+    if (sourceMode(change.fields[p + "type"] ?? d.type) === "existing") {
+      // Selecting a library document proves only the local selection. Its
+      // association with the new registration needs independent verification.
+      await intend("event_document_attachment:" + d.id, {
+        document_type_id: d.id,
+        existing_document_id: expected.documents.find((document) => document.id === d.id)!.existing,
+      });
+    }
     if (
       sourceMode(change.fields[p + "type"] ?? d.type) !== "existing" &&
       (change.fields[p + "save_to_library"] ?? d.save_to_library) === true
