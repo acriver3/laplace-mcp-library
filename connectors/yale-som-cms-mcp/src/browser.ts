@@ -71,6 +71,15 @@ const READ_POST_PATHS = new Set([
   '/api/v2/job-postings/post-query', '/companies/getcontacts',
 ]);
 
+/** The same reviewed classifier is shared by read protection and write verification. */
+export function isReadRequest(method:string, requestUrl:string):boolean {
+  method = method.toUpperCase();
+  if (['GET','HEAD','OPTIONS'].includes(method)) return true;
+  let url:URL;try { url = new URL(requestUrl); } catch { return false; }
+  const path = url.pathname.toLowerCase();
+  return url.origin === CMS_ORIGIN && method === 'POST' && (READ_POST_PATHS.has(path) || /^\/api\/v2\/resume-books\/\d+\/items\/query$/.test(path));
+}
+
 /** Installed for the lifetime of a headless context, including after a preview ends. */
 export class ReadRequestGuard {
   private mutationActive = false;
@@ -79,11 +88,10 @@ export class ReadRequestGuard {
     const request = route.request();
     const method = request.method().toUpperCase();
     const url = new URL(request.url());
-    if (['GET','HEAD','OPTIONS'].includes(method)) return route.fallback();
+    if (isReadRequest(method,url.href)) return route.fallback();
     const sameTenant = url.origin === CMS_ORIGIN;
     const path = url.pathname.toLowerCase();
-    const readPost = sameTenant && method === 'POST' && (READ_POST_PATHS.has(path) || /^\/api\/v2\/resume-books\/\d+\/items\/query$/.test(path));
-    if (readPost || sameTenant && this.mutationActive) return route.fallback();
+    if (sameTenant && this.mutationActive) return route.fallback();
     // Third-party telemetry is blocked silently. An unknown CMS request must be
     // reviewed explicitly; strip query strings and never inspect auth headers/body.
     if (sameTenant) this.blocked.set(method+' '+path, {method,path});
@@ -111,6 +119,8 @@ export class CmsBrowser {
   private readonly readGuard = new ReadRequestGuard();
   private currentPage?: Page;
   private opening?: Promise<Page>;
+  private closing?: Promise<void>;
+  private generation = 0;
   private names = new Map<string, string>();
   constructor(
     profileDir = DEFAULT_PROFILE,
@@ -127,11 +137,21 @@ export class CmsBrowser {
     this.lock = new ProfileLock(this.profile);
   }
   async page(): Promise<Page> {
+    if (this.closing) await this.closing;
     if (this.currentPage && !this.currentPage.isClosed()) return this.currentPage;
     if (!this.opening) this.opening = this.open().finally(() => { this.opening = undefined; });
     return this.opening;
   }
+  protected async launchContext():Promise<BrowserContext> {
+    return chromium.launchPersistentContext(this.profile, {
+      channel: this.channel, headless: !this.headed,
+      viewport: { width: 1440, height: 1000 }, serviceWorkers: 'block',
+      acceptDownloads: true, timeout: 30_000,
+    });
+  }
   private async open(): Promise<Page> {
+    const generation = this.generation;
+    let context:BrowserContext|undefined;
     let ancestor = this.profile;
     while (true) {
       try { await realpath(ancestor); break; }
@@ -148,20 +168,20 @@ export class CmsBrowser {
     await this.lock.acquire();
     try {
       await mkdir(this.profile, { recursive: true, mode: 0o700 });
-      this.context = await chromium.launchPersistentContext(this.profile, {
-        channel: this.channel, headless: !this.headed,
-        viewport: { width: 1440, height: 1000 }, serviceWorkers: 'block',
-        acceptDownloads: true, timeout: 30_000,
-      });
+      context = await this.launchContext();
+      if (generation !== this.generation) throw new CmsError('browser_closed','CMS browser startup was cancelled.');
+      this.context = context;
       if (!this.headed) await this.context.route('**/*', route => this.readGuard.handle(route));
       this.context.setDefaultTimeout(15_000);
       this.context.setDefaultNavigationTimeout(30_000);
       this.currentPage = this.context.pages()[0] || await this.context.newPage();
       for (const page of this.context.pages()) if (page !== this.currentPage) await page.close({ runBeforeUnload: false });
+      if (generation !== this.generation) throw new CmsError('browser_closed','CMS browser startup was cancelled.');
       this.currentPage.on('dialog', dialog => { void dialog.dismiss().catch(() => {}); });
       return this.currentPage;
     } catch (error) {
-      await this.close();
+      if (this.context === context) { this.context = undefined; this.currentPage = undefined; }
+      try { await context?.close(); } finally { await this.lock.release(); }
       if (error instanceof CmsError) throw error;
       throw new CmsError('browser_unavailable', 'Could not launch the dedicated CMS browser. Install the selected Chrome/Edge channel and stop other processes using this profile.');
     }
@@ -197,10 +217,18 @@ export class CmsBrowser {
     return this.identity();
   }
   async close() {
-    const context = this.context;
-    this.context = undefined;
-    this.currentPage = undefined;
-    this.names.clear();
-    try { await context?.close(); } finally { await this.lock.release(); }
+    if (this.closing) return this.closing;
+    const opening = this.opening;
+    this.generation++;
+    this.closing = (async()=>{
+      // A late launch closes its own context before releasing the profile owner.
+      await opening?.catch(()=>{});
+      const context = this.context;
+      this.context = undefined;
+      this.currentPage = undefined;
+      this.names.clear();
+      try { await context?.close(); } finally { await this.lock.release(); }
+    })().finally(()=>{this.closing = undefined;});
+    return this.closing;
   }
 }

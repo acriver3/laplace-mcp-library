@@ -108,6 +108,7 @@ export class CmsReads {
     if (id && area === 'appointments') {
       const known=this.knownRecords.get(`${area}:${id}`);
       if(typeof known?.start==='string'){await page.evaluate(start=>{const e=document.querySelector('tt-calendar');const c=e&&(window as any).angular?.element(e).controller('ttCalendar');if(c?.goToDate)c.goToDate(start);},known.start);await this.settled(page);}
+      this.records('appointments',await this.snapshot(page,false,'appointments'));
       const opened = await page.evaluate(id => {
         const element = document.querySelector('tt-appointment-list');
         const ctrl = element && (window as any).angular?.element(element).controller('ttAppointmentList');
@@ -174,14 +175,15 @@ export class CmsReads {
       const angular = (window as any).angular;
       const models:JsonRecord[] = [];
       const seen = new Set<string>();
-      const fields = ['Id','EntityId','TypeId','Name','Title','Subject','Description','Status','StatusId','JobStatus','ApplicationStatus','RegistrationStatus','ApprovalStatus','CompanyId','CompanyName','ContactId','ContactName','AdviserId','AdviserName','StartTime','EndTime','start','end','Location','DueDate','Date','Email','EmailAddress','Phone','JobTitle','IsFavorite','IsRegistered','IsApplied','IsForOfficeHours','HasMaxAppointmentsReached','ApplicationDocumentTypeId','FileId','FileName','Url','Priority','PriorityId','Comments','InterviewDate','ApplicationDeadline','CreatedDate','UpdatedDate','TimeSlotId','EventTimeSlotId','ScheduleId','EventId','slotStatus','canRegisterForTimeslot','canCancelRegistration','IsAttending','IsOnWaitlist','IsTimeSlotEvent','IsUpcoming','RegistrationBeginDate','RegistrationEndDate','IsFull','IsAvailable','IsRegistered','MaxAttendees','NumRegistrations','RegistrationCount','Capacity','ActivityDate','NoteTypeName','CanEdit','CanDelete','AcademicYearId','IsWithdrawn','IsApproved','DidAttend','IsNoShow'];
-      const collect = (values:any,source:string) => {
+      const fields = ['Id','EntityId','TypeId','Name','Title','Subject','Description','Status','StatusId','JobStatus','ApplicationStatus','RegistrationStatus','ApprovalStatus','CompanyId','CompanyName','ContactId','ContactName','AdviserId','AdviserName','StartTime','EndTime','start','end','Location','DueDate','Date','Email','EmailAddress','Phone','JobTitle','IsFavorite','IsRegistered','IsApplied','IsForOfficeHours','HasMaxAppointmentsReached','ApplicationDocumentTypeId','FileId','FileName','Url','Priority','PriorityId','Comments','InterviewDate','ApplicationDeadline','CreatedDate','UpdatedDate','TimeSlotId','EventTimeSlotId','ScheduleId','EventId','slotStatus','canRegisterForTimeslot','canCancelRegistration','IsAttending','IsOnWaitlist','IsTimeSlotEvent','IsUpcoming','RegistrationBeginDate','RegistrationEndDate','IsFull','IsAvailable','IsRegistered','MaxAttendees','NumRegistrations','RegistrationCount','Capacity','ActivityDate','NoteTypeName','CanEdit','CanDelete','AcademicYearId','IsWithdrawn','IsApproved','DidAttend','IsNoShow','StatusName','ApplicationStartDate','ApplicationEndDate','StudentDescription','AcademicYearName','NumResumes','NumPendingResumes'];
+      const collect = (values:any,source:string,kind?:string) => {
         const items = Array.isArray(values)?values:values?.Items || values?.Results;
         if (!Array.isArray(items)) return;
         for (const item of items) {
           if (!item || typeof item!=='object' || (!item.Id && !item.EntityId)) continue;
           const key=source+':'+String(item.EntityId || item.Id); if(seen.has(key))continue;seen.add(key);
-          const result:JsonRecord={_source:source};
+          const inferred=kind||(source.includes('job-posting')?'job':source.includes('event')?'event':source.includes('appointment')?'appointment':source.includes('company')?'employer':source.includes('contact')?'contact':source.includes('resume-book')?'resume_book':source.includes('resource')?'resource':source.includes('task')?'task':source.includes('application-document')?'document':source.includes('experience-timeline')?'outcome':source.includes('education')?'education':source==='activity-stream-card'?'activity':source==='saved_search'?'saved_search':undefined);
+          const result:JsonRecord={_source:source,_kind:inferred};
           for(const field of fields) {
             const value=item[field];
             if(typeof value==='string'||typeof value==='number'||typeof value==='boolean'||value===null) result[field]=value;
@@ -191,19 +193,23 @@ export class CmsReads {
       };
       if(angular) for(const element of [root,...root.querySelectorAll('*')]) {
         const tag=element.tagName.toLowerCase();
-        if(!tag.startsWith('tt-'))continue;
+        if(!tag.startsWith('tt-')||/input|filter|select|lookup|dropdown/.test(tag))continue;
         const name=tag.replace(/-([a-z])/g,(_,c)=>c.toUpperCase());
         const ctrl=angular.element(element).controller(name); if(!ctrl)continue;
-        for(const key of ['calendarEvents','appointmentCalendarEvents','tasks','jobPostings','allApplicationDocuments','applicationDocuments','companyPagedList','contactPagedList','pagedResult','pagedList','resumeBooks','items','resources','jobs','educations','timeSlots','studentTimeSlots']) collect(ctrl[key],tag);
+        for(const key of ['calendarEvents','appointmentCalendarEvents','tasks','jobPostings','allApplicationDocuments','applicationDocuments','companyPagedList','contactPagedList','pagedResult','pagedList','resumeBooks','items','resources','jobs','educations','timeSlots','studentTimeSlots']) collect(ctrl[key],tag,({jobPostings:'job',allApplicationDocuments:'document',applicationDocuments:'document',companyPagedList:'employer',contactPagedList:'contact',resumeBooks:'resume_book',resources:'resource',educations:'education',tasks:'task',timeSlots:'event_slot',studentTimeSlots:'event_slot'} as Record<string,string>)[key]);
         if(tag==='tt-saved-search')for(const group of ctrl.savedSearchGroups||[])collect(group.savedSearches,'saved_search');
-        for(const key of ['event','jobPosting','company','contact','task','applicationDocument']) if(ctrl[key])collect([ctrl[key]],tag);
+        if(tag==='tt-job-posting-detail'&&ctrl.model?.jobPosting)collect([ctrl.model.jobPosting],tag);
+        for(const key of ['event','jobPosting','company','contact','task','applicationDocument','currentResourceItem']) if(ctrl[key])collect([ctrl[key]],tag,({event:'event',jobPosting:'job',company:'employer',contact:'contact',task:'task',applicationDocument:'document',currentResourceItem:'resource'} as Record<string,string>)[key]);
       }
+      if(angular){const e=document.querySelector('#resume-books-detail-page');const c=e&&angular.element(e).controller();if(c?.entity)collect([c.entity],'resume-book-detail');}
       const ko=(window as any).ko;
       if(ko)for(const card of root.querySelectorAll('.activity-stream-card')){const model=ko.dataFor(card);if(!model)continue;const values:JsonRecord={};for(const key of fields){const v=model[key];values[key]=typeof v==='function'?v():v;}collect([values],'activity-stream-card');}
       const context:JsonRecord={};
       const safe=(value:any,depth=0):any=>{if(value===null||['string','number','boolean'].includes(typeof value))return value;if(depth>5)return undefined;if(Array.isArray(value))return value.slice(0,100).map(v=>safe(v,depth+1));if(typeof value!=='object')return undefined;return Object.fromEntries(Object.entries(value).filter(([k])=>!k.startsWith('$')&&!/token|secret|cookie|password|csrf|passport|session|^Student(?:Id|Name|Email)$/i.test(k)).slice(0,200).map(([k,v])=>[k,safe(v,depth+1)]).filter(([,v])=>v!==undefined));};
-      if(angular){for(const [tag,keys]of [['tt-event-detail',['studentRegistration','studentTimeSlots','studentRegistrationLabel','scheduleDates']],['tt-time-slot-list',['eventId','currentUserTimeSlot','canCancelRegistration','canSwapTimeSlot']],['tt-job-posting-detail',['studentApplication','application','studentRegistration','applicationStatus']],['tt-calendar',['view']]] as const){const e=document.querySelector(tag);if(!e)continue;const c=angular.element(e).controller(tag.replace(/-([a-z])/g,(_,v)=>v.toUpperCase()));if(!c)continue;context[tag]=Object.fromEntries(keys.filter(k=>c[k]!==undefined).map(k=>[k,safe(c[k])]));}}
+      if(angular){for(const [tag,keys]of [['tt-event-detail',['studentRegistrationLabel','scheduleDates']],['tt-time-slot-list',['eventId','canCancelRegistration','canSwapTimeSlot']],['tt-job-posting-detail',['applicationStatus']],['tt-calendar',['view']]] as const){const e=document.querySelector(tag);if(!e)continue;const c=angular.element(e).controller(tag.replace(/-([a-z])/g,(_,v)=>v.toUpperCase()));if(!c)continue;context[tag]=Object.fromEntries(keys.filter(k=>c[k]!==undefined).map(k=>[k,safe(c[k])]));}}
       if(angular){const e=document.querySelector('tt-event-detail');const c=e&&angular.element(e).controller('ttEventDetail');if(c?.event){const event=c.event;const slots=document.querySelector('tt-time-slot-list');const sc=slots&&angular.element(slots).controller('ttTimeSlotList');const own=sc?.currentUserTimeSlot;const slotKeys=['Id','EventTimeSlotId','EventId','ScheduleId','StartTime','EndTime','slotStatus','canRegisterForTimeslot','canCancelRegistration'];context.registration_state={event_id:event.Id,is_attending:event.IsAttending,rules:safe(event.RegistrationRules),label:c.studentRegistrationLabel,current_slot:own?Object.fromEntries(slotKeys.filter(k=>own[k]!==undefined).map(k=>[k,safe(own[k])])):null};}}
+      if(angular){const e=document.querySelector('tt-job-posting-detail');const c=e&&angular.element(e).controller('ttJobPostingDetail');const m=c?.model;if(m?.jobPosting){const a=m.currentApplication;const user=(window as any).TT?.CurrentSession?.CurrentUser;const keys=['Id','JobPostingId','ApplicationDate','StudentDecisionId','StudentDecisionName','StudentDecisionDisplay','EmployerDecisionId','EmployerDecisionName','OciStatusId','StudentDisplayOciStatusId','OciStatusDisplay','IsOfferedInterview','InterviewOfferStatusId','InterviewOfferStatusName','JobPostingApplicationDocuments','TimeSlots'];context.application_state={job_posting_id:m.jobPosting.Id,has_applied:m.rules?.HasApplied,account_matches:a?.Id>0&&String(a.ApplicantId)===String(user?.Id),rules:Object.fromEntries(['HasApplied','CanApply','IsEligibleToApply','CanWithdraw','CanDeleteApplication','CanEditApplication','CanSelectInterviewTimeSlot','CanAcceptInterview'].filter(k=>m.rules?.[k]!==undefined).map(k=>[k,m.rules[k]])),current_application:a?.Id>0?Object.fromEntries(keys.filter(k=>a[k]!==undefined).map(k=>[k,safe(a[k])])):null};}}
+      if(angular){const e=document.querySelector('#resume-books-detail-page');const c=e&&angular.element(e).controller();if(c?.entity)context.resume_book_state={resume_book_id:c.entity.Id,has_applied:c.hasCurrentStudentApplied};}
       const filterElement=root.querySelector('tt-filter');
       const filter=filterElement&&angular?.element(filterElement).controller('ttFilter');
       if(filter)context.active_filters=safe(filter.ttSelectedFilters||filter.queryCriteria?.Filters||[]);
@@ -214,42 +220,51 @@ export class CmsReads {
     });
   }
 
-  private recordId(url: string): string | undefined {
+  private recordLink(url: string): {id:string;kind:string} | undefined {
     const u=sameOrigin(url);
     const value=u.pathname+u.hash;
-    const download=value.match(/\/api\/v2\/resource-library-items\/(\d+)\/download/i);
-    if(download)return `file:${download[1]}`;
+    const download=value.match(/^\/api\/v2\/resource-library-items\/(\d+)\/download(?:$|[?#])/i);
+    if(download)return {id:`file:${download[1]}`,kind:'resource'};
     const folder=value.match(/^\/resource-library\/(\d+)(?:$|[/?#])/i);
-    if(folder)return `folder:${folder[1]}`;
-    const id=value.match(/(?:jobPostings|events|Companies|Contacts|resume-books|school-offices)\/(\d+)(?:$|[/?#])/i);
-    return id?.[1];
+    if(folder)return {id:`folder:${folder[1]}`,kind:'resource'};
+    const patterns:[string,RegExp][]=[['job',/\/jobPostings\/(\d+)(?:$|[/?#])/i],['event',/\/events\/(\d+)(?:$|[/?#])/i],['employer',/\/Companies\/(\d+)(?:$|[/?#])/i],['contact',/\/Contacts\/(\d+)(?:$|[/?#])/i],['resume_book',/\/resume-books\/(\d+)(?:$|[/?#])/i],['office',/\/school-offices\/(\d+)(?:$|[/?#])/i]];
+    for(const [kind,pattern]of patterns){const match=value.match(pattern);if(match)return {id:match[1],kind};}
   }
 
   private records(area: Area, snap: Snapshot, detailId?:string): CmsRecord[] {
     const found=new Map<string,CmsRecord>();
     for(const link of snap.links){
       if(area==='activity'||area==='saved_searches')continue;
-      let url:URL;try{url=sameOrigin(link.url);}catch{continue;}
-      const id=this.recordId(url.href);if(!id)continue;
-      const normalized={id,name:link.name,url:url.href,text:link.text,columns:link.cells,...(link.favorite!==undefined?{favorite:link.favorite}:{})};
+      let url:URL;try{url=sameOrigin(link.url);}catch{if(['resources','documents'].includes(area)){const id=`external:${digest(link.url).slice(0,20)}`;found.set(id,{id,name:link.name,url:link.url,external:true,text:link.text});}continue;}
+      const linkRecord=this.recordLink(url.href);if(!linkRecord)continue;
+      const allowed:Partial<Record<Area,string[]>>={jobs:['job'],applications:['job'],events:['event'],employers:['employer'],contacts:['contact'],targets:['employer','contact'],resume_books:['resume_book'],resources:['resource'],offices:['office'],dashboard:['job','event','employer','contact','office'],calendar:['event','job','office'],interviews:['job','event']};
+      if(!allowed[area]?.includes(linkRecord.kind))continue;
+      const {id,kind}=linkRecord;
+      const normalized={id,kind,name:link.name,url:url.href,text:link.text,columns:link.cells,...(link.favorite!==undefined?{favorite:link.favorite}:{})};
       found.set(id,normalized);this.knownLinks.set(`${area}:${id}`,{url:url.href,name:link.name});
     }
     for(const model of snap.models){
+      const allowedModels:Partial<Record<Area,string[]>>={jobs:['job'],applications:['job'],events:['event','event_slot'],appointments:['appointment'],employers:['employer'],contacts:['contact'],targets:['employer','contact'],tasks:['task'],activity:['activity'],documents:['document'],resume_books:['resume_book'],resources:['resource'],saved_searches:['saved_search'],outcomes:['outcome'],profile:['outcome','education']};
+      if(allowedModels[area]&&!allowedModels[area]!.includes(String(model._kind)))continue;
       if(area==='saved_searches'&&model._source!=='saved_search')continue;
-      const id=String(model.EntityId||model.Id);
+      if(area==='outcomes'&&model._source!=='tt-student-profile-experience-timeline')continue;
+      const rawId=String(model.EntityId||model.Id);
+      let id=rawId;
+      if(area==='resources'){id=`${model.TypeId===1?'file':model.TypeId===2?'folder':model.TypeId===3?'link':'item'}:${rawId}`;if(model.TypeId===3&&typeof model.Url==='string'){const linked=[...found.values()].find(r=>r.url===model.Url);if(linked){found.delete(linked.id);found.set(id,{...linked,id});}}}
       if(!id||id==='undefined')continue;
       const existing=found.get(id);
       const name=String(model.Name||model.Title||model.Subject||model.AdviserName||model.CompanyName||model.ContactName||existing?.name||(model._source==='tt-time-slot-list'?`${model.StartTime} – ${model.EndTime}`:`${area} ${id}`));
       if(model._source==='tt-time-slot-list'&&typeof model.StartTime==='string'){model.start=/Z$|[+-]\d\d:\d\d$/.test(model.StartTime)?model.StartTime:model.StartTime+'Z';if(typeof model.EndTime==='string')model.end=/Z$|[+-]\d\d:\d\d$/.test(model.EndTime)?model.EndTime:model.EndTime+'Z';}
       const data=Object.fromEntries(Object.entries(model).filter(([key])=>!key.startsWith('_')));
-      found.set(id,{...existing,id,name,...data,...(model.start?{start:model.start,end:model.end,timezone:TIMEZONE}:{}),...(area==='appointments'||model._source==='tt-time-slot-list'?{slot_id:id}:{}),...(model._source==='tt-time-slot-list'?{kind:'event_slot'}:{}),source_component:model._source});
+      found.set(id,{...existing,id,name,...data,...(model._kind?{kind:model._kind}:{}),...(model.start?{start:model.start,end:model.end,timezone:TIMEZONE}:{}),...(area==='appointments'||model._source==='tt-time-slot-list'?{slot_id:id}:{}),...(model._source==='tt-time-slot-list'?{kind:'event_slot'}:{}),source_component:model._source});
     }
-    if(!found.size && snap.tableRows.length)for(const row of snap.tableRows){
+    if(!found.size && area==='analytics' && snap.tableRows.length)for(const row of snap.tableRows){
       if(/^(no |there are no)/i.test(row.text))continue;
       const id=`row:${digest(row.cells).slice(0,20)}`;
       found.set(id,{id,name:row.cells[0]||row.text,columns:row.cells,text:row.text,read_only_summary:true});
     }
-    if(detailId && ['jobs','applications','events','employers','contacts','resume_books','resources','appointments'].includes(area) && !found.has(detailId)) found.set(detailId,{id:detailId,name:snap.headings[0]||snap.title,text:snap.text});
+    if(detailId&&area==='appointments'&&!found.has(detailId)){const record=this.knownRecords.get(`${area}:${detailId}`);if(record)found.set(detailId,{...record,text:snap.text});}
+    if(detailId&&['jobs','applications','events','employers','contacts','resume_books','resources','appointments'].includes(area)&&!found.has(detailId))throw new CmsError('record_not_found','CMS did not expose a verified record with the requested ID.',{area,id:detailId});
     for(const record of found.values())this.knownRecords.set(`${area}:${record.id}`,record);
     return [...found.values()];
   }
@@ -358,7 +373,7 @@ export class CmsReads {
     const selected=records.slice(offset,offset+input.limit);
     const text=input.id||!records.length?snap.text.slice(0,60000):selected.map(r=>String(r.text||r.name)).join('\n\n').slice(0,60000);
     return {area:input.area,url:page.url(),title:snap.title,timezone:TIMEZONE,text,records:selected,fields:await extractReadFields(page),filters:snap.filters,
-      headings:snap.headings,context:snap.context,...(snap.context.registration_state?{registration_state:snap.context.registration_state}:{}),total:snap.total,loaded_records:records.length,...(cursor?{next_cursor:cursor,truncated:true}:{}),
+      headings:snap.headings,context:snap.context,...(snap.context.registration_state?{registration_state:snap.context.registration_state}:{}),...(snap.context.application_state?{application_state:snap.context.application_state}:{}),total:snap.total,loaded_records:records.length,...(cursor?{next_cursor:cursor,truncated:true}:{}),
       ...(input.area==='interviews'?{view_description:'My Interview Availability and personal calendar; job-specific interview status is shown under applications.'}:{}),
       ...(input.area==='saved_searches'?{view_description:`Saved search menu for ${input.view||'jobs'}`}:{})};
   }
@@ -368,7 +383,14 @@ export class CmsReads {
     const root=page.locator(MAIN).first();
     if(area==='activity'){const marked=await page.evaluate(id=>{const found=[...document.querySelectorAll('.activity-stream-card')].filter(e=>String((window as any).ko?.dataFor(e)?.Id?.())===id);if(found.length!==1)return false;found[0].setAttribute('data-laplace-record-id',id);return true;},id);if(marked)return root.locator(`[data-laplace-record-id=${JSON.stringify(id)}]`);}
     const known=this.knownLinks.get(`${area}:${id}`);
-    if(known){const links=root.locator('a').filter({hasText:known.name});const hrefs=await links.evaluateAll(es=>es.map(e=>(e as HTMLAnchorElement).href));const index=hrefs.findIndex(h=>h===known.url);if(index>=0)return links.nth(index).locator('xpath=ancestor-or-self::*[self::tr or @role="row"][1]');}
+    if(known){
+      const hrefs=await root.locator('a[href]').evaluateAll((es,url)=>es.filter(e=>(e as HTMLAnchorElement).href===url).map(e=>e.getAttribute('href')),known.url);
+      if(hrefs.length===1&&hrefs[0]){
+        const link=root.locator(`a[href=${JSON.stringify(hrefs[0])}]`);
+        const row=link.locator('xpath=ancestor-or-self::*[self::tr or @role="row"][1]');
+        if(await row.count()===1)return row;
+      }
+    }
     const candidate=root.locator(`[data-id=${JSON.stringify(id)}],[data-record-id=${JSON.stringify(id)}]`);
     if(await candidate.count()===1)return candidate;
     throw new CmsError('record_not_found','No unambiguous rendered element is bound to this record ID. Read the list again.');
@@ -384,10 +406,26 @@ export class CmsReads {
     if(input.area==='resources'&&!/^\/api\/v2\/resource-library-items\/\d+\/download$/i.test(url.pathname))throw new CmsError('not_a_file','This resource is a folder or external link. Open/read it to find a downloadable file.');
     if(input.area==='documents'&&!/\/application-documents\/\d+\/(?:download|file)/i.test(url.pathname))throw new CmsError('unsupported_download','CMS did not expose a verified application-document download link.');
     const page=await this.browser.page();
-    let response;
+    let response:{status():number;headers():Record<string,string>;ok():boolean;body():Promise<Buffer>}|undefined;
+    let credentialFree=false;
+    const storageOrigin='https://ttpfmstrusncprod.blob.core.windows.net'; // Observed resource download redirect, 2026-11-11.
     for(let redirects=0;redirects<5;redirects++){
-      response=await page.context().request.get(url.href,{maxRedirects:0,timeout:30_000});
-      if(response.status()>=300&&response.status()<400){const location=response.headers().location;if(!location)throw new CmsError('download_failed','Download redirect had no destination.');url=sameOrigin(location,url.href);continue;}break;
+      if(credentialFree){
+        const fetched=await fetch(url,{method:'GET',credentials:'omit',redirect:'manual',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(30_000)});
+        response={status:()=>fetched.status,headers:()=>Object.fromEntries(fetched.headers),ok:()=>fetched.ok,body:async()=>{
+          if(!fetched.body)return Buffer.alloc(0);
+          const parts:Uint8Array[]=[];let bytes=0;
+          for await(const part of fetched.body){bytes+=part.byteLength;if(bytes>100*1024*1024){await fetched.body.cancel().catch(()=>{});throw new CmsError('file_too_large','This file exceeds the 100 MiB download limit.');}parts.push(part);}
+          return Buffer.concat(parts);
+        }};
+      }else response=await page.context().request.get(url.href,{maxRedirects:0,timeout:30_000});
+      if(response.status()>=300&&response.status()<400){
+        const location=response.headers().location;if(!location)throw new CmsError('download_failed','Download redirect had no destination.');
+        const next=new URL(location,url);
+        if(next.username||next.password||![CMS_ORIGIN,storageOrigin].includes(next.origin))throw new CmsError('external_link','Download redirects to an unreviewed site. Open its original source link yourself.');
+        if(next.origin!==CMS_ORIGIN)credentialFree=true;
+        url=next;continue;
+      }break;
     }
     if(!response||!response.ok())throw new CmsError(response?.status()===401?'auth_required':'download_failed','CMS did not return a downloadable file.');
     const type=response.headers()['content-type']||'';

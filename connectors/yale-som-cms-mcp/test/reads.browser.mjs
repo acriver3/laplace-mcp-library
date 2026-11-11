@@ -72,6 +72,8 @@ test('read-only record binding uses the precise discovered URL and preserves tab
     const row=await reads.recordLocator('jobs',result.records[1].id);
     assert.equal(await row.getAttribute('data-id'),'102');
     assert.equal(result.records[1].columns[1],'Open');
+    await page.evaluate(()=>{const rows=document.querySelector('tbody');rows.prepend(rows.lastElementChild);});
+    assert.equal(await row.getAttribute('data-id'),'102','Stable href binding survives list reordering');
     await assert.rejects(()=>reads.recordLocator('jobs','999'),{code:'record_not_found'});
   });
 });
@@ -98,10 +100,10 @@ test('downloads keep redirects on origin, never overwrite files, and return inte
   }finally{await rm(dir,{recursive:true,force:true});}
 });
 
-const components = `<!doctype html><body class="logged-in-user"><nav><a href="/students/profile">Profile</a></nav><main role="main"><h1>Fixture account data</h1><tt-calendar></tt-calendar><tt-appointment-list></tt-appointment-list><tt-event-detail></tt-event-detail><tt-time-slot-list></tt-time-slot-list><tt-saved-search><button>My Saved Searches</button><p>Search Alpha</p></tt-saved-search></main><script>
+const components = `<!doctype html><body class="logged-in-user"><nav><a href="/students/profile">Profile</a></nav><main role="main"><h1>Fixture account data</h1><tt-calendar></tt-calendar><tt-appointment-list></tt-appointment-list><tt-event-detail></tt-event-detail><tt-job-posting-detail></tt-job-posting-detail><tt-inline-single-select-input></tt-inline-single-select-input><tt-time-slot-list></tt-time-slot-list><tt-saved-search><button>My Saved Searches</button><p>Search Alpha</p></tt-saved-search></main><script>
 window.TT={CurrentSession:{CurrentUser:{Id:1234567}}};
 const event={EntityId:901,Id:901,AdviserName:'Coach',start:'2027-01-05T14:00:00Z',end:'2027-01-05T14:30:00Z',TypeId:2};
-const controllers={ttCalendar:{view:{listViewDateRange:{Start:'2027-01-05T05:00:00Z',End:'2027-01-12T05:00:00Z'}},goToDate(start){this.lastStart=start;}},ttAppointmentList:{calendarEvents:[event],showDetails(value){if(value!==event)throw Error('Wrong event binding');document.body.insertAdjacentHTML('beforeend','<section role="dialog"><h2>Appointment 901</h2><p>Coach — verified slot</p></section>');}},ttEventDetail:{event:{Id:700,Name:'Fixture event',IsAttending:true,RegistrationRules:{IsAttending:true,IsOnWaitlist:false}},studentRegistrationLabel:'Registered'},ttTimeSlotList:{eventId:700,currentUserTimeSlot:{Id:701,StudentName:'PRIVATE',StudentId:1234567},timeSlots:[{Id:701,EventId:700,EventTimeSlotId:702,StartTime:'2027-01-05T14:00:00',EndTime:'2027-01-05T14:30:00',StudentName:'OTHER PRIVATE',StudentId:7654321,canRegisterForTimeslot:false}]},ttSavedSearch:{savedSearchGroups:[{savedSearches:[{Id:801,Name:'Search Alpha'}]}]}};
+const controllers={ttJobPostingDetail:{model:{jobPosting:{Id:555},rules:{HasApplied:false,CanApply:true},currentApplication:{Id:0,JobPostingId:0,OciStatusDisplay:'Applied',ApplicationDate:'2027-01-05T00:00:00'}}},ttInlineSingleSelectInput:{items:[{Id:444,Name:'Currency option is not a record'}]},ttCalendar:{view:{listViewDateRange:{Start:'2027-01-05T05:00:00Z',End:'2027-01-12T05:00:00Z'}},goToDate(start){this.lastStart=start;}},ttAppointmentList:{calendarEvents:[event],showDetails(value){if(value!==event)throw Error('Wrong event binding');document.body.insertAdjacentHTML('beforeend','<section role="dialog"><h2>Appointment 901</h2><p>Coach — verified slot</p></section>');}},ttEventDetail:{event:{Id:700,Name:'Fixture event',IsAttending:true,RegistrationRules:{IsAttending:true,IsOnWaitlist:false}},studentRegistrationLabel:'Registered'},ttTimeSlotList:{eventId:700,currentUserTimeSlot:{Id:701,StudentName:'PRIVATE',StudentId:1234567},timeSlots:[{Id:701,EventId:700,EventTimeSlotId:702,StartTime:'2027-01-05T14:00:00',EndTime:'2027-01-05T14:30:00',StudentName:'OTHER PRIVATE',StudentId:7654321,canRegisterForTimeslot:false}]},ttSavedSearch:{savedSearchGroups:[{savedSearches:[{Id:801,Name:'Search Alpha'}]}]}};
 window.angular={element(e){return {injector(){return {has(){return true},get(){return {pendingRequests:[]}}}},controller(name){return controllers[name]}}}};
 </script>`;
 
@@ -130,4 +132,73 @@ test('saved-search reads expose saved searches rather than underlying job result
     assert.deepEqual(result.records.map(x=>[x.id,x.name]),[['801','Search Alpha']]);
     assert.equal(result.next_cursor,undefined);
   },components);
+});
+
+
+test('unsubmitted synthesized application status cannot masquerade as an application',async()=>{
+  await withBrowser(async(browser,page,reads)=>{
+    const result=await reads.read({area:'jobs',id:'555',limit:25});
+    assert.equal(result.application_state.job_posting_id,555);
+    assert.equal(result.application_state.has_applied,false);
+    assert.equal(result.application_state.current_application,null);
+    assert.equal(result.application_state.account_matches,false);
+    assert.equal(result.records.some(r=>r.id==='444'),false);
+  },components);
+});
+
+
+test('read records are scoped to their area and unknown details cannot be fabricated',()=>{
+  const reads=new CmsReads({});
+  const snap={title:'Fixture',text:'Page could not load',headings:['Fixture'],links:[
+    {name:'Job',url:CMS_ORIGIN+'/jobPostings#/jobPostings/1',text:'Job',cells:[]},
+    {name:'Employer',url:CMS_ORIGIN+'/Companies#/Companies/2',text:'Employer',cells:[]},
+    {name:'Event',url:CMS_ORIGIN+'/events#/events/3',text:'Event',cells:[]},
+  ],models:[{Id:4,Name:'Related company',_source:'tt-company-header',_kind:'employer'}],tableRows:[],filters:[],context:{}};
+  assert.deepEqual(reads.records('jobs',snap).map(r=>[r.id,r.kind]),[['1','job']]);
+  assert.deepEqual(reads.records('events',snap).map(r=>[r.id,r.kind]),[['3','event']]);
+  assert.deepEqual(reads.records('employers',snap).map(r=>r.id),['2','4']);
+  assert.throws(()=>reads.records('jobs',snap,'999'),{code:'record_not_found'});
+  assert.equal(reads.records('dashboard',snap).every(r=>typeof r.kind==='string'),true);
+});
+
+
+test('closing a delayed launch retains the owner until the late browser is closed',async()=>{
+  const dir=await mkdtemp(join(tmpdir(),'cms-late-launch-'));
+  let launchStarted,releaseLaunch,closed=0;
+  const started=new Promise(resolve=>{launchStarted=resolve});
+  const gate=new Promise(resolve=>{releaseLaunch=resolve});
+  class DelayedBrowser extends CmsBrowser {
+    async launchContext(){launchStarted();await gate;return {close:async()=>{closed++}};}
+  }
+  const browser=new DelayedBrowser(join(dir,'profile'));
+  const pending=browser.page();
+  try{
+    await started;
+    const rejected=assert.rejects(()=>pending,{code:'browser_closed'});
+    const closing=browser.close();
+    assert.ok((await readFile(browser.lock.file,'utf8')).includes('token'));
+    releaseLaunch();await Promise.all([closing,rejected]);
+    assert.equal(closed,1);assert.equal(browser.context,undefined);assert.equal(browser.currentPage,undefined);
+    await assert.rejects(()=>readFile(browser.lock.file),{code:'ENOENT'});
+  }finally{releaseLaunch();await browser.close();await rm(dir,{recursive:true,force:true});}
+});
+
+test('observed signed storage redirects use a fresh credential-free fetch',async()=>{
+  const dir=await mkdtemp(join(tmpdir(),'cms-storage-'));
+  const identity={key:'fixture-account',name:'Test',account_id:'1'};
+  const yaleRequests=[],storageRequests=[];
+  const originalFetch=globalThis.fetch;
+  const browser={downloadsDir:dir,identity:async()=>identity,page:async()=>({context:()=>({request:{get:async(url,options)=>{
+    yaleRequests.push({url,options});return {status:()=>302,headers:()=>({location:'https://ttpfmstrusncprod.blob.core.windows.net/files/fixture?sig=private'}),ok:()=>false};
+  }}})})};
+  const reads=new CmsReads(browser);reads.account=identity.key;reads.knownLinks.set('resources:file:42',{url:CMS_ORIGIN+'/api/v2/resource-library-items/42/download',name:'Fixture'});
+  globalThis.fetch=async(url,options)=>{storageRequests.push({url:String(url),options});return new Response('%PDF-1.4 storage fixture',{headers:{'content-type':'application/pdf'}})};
+  try{
+    const result=await reads.download({area:'resources',id:'file:42',filename:'fixture.pdf'});
+    assert.equal(yaleRequests.length,1);assert.equal(storageRequests.length,1);
+    assert.equal(storageRequests[0].options.credentials,'omit');assert.equal(storageRequests[0].options.redirect,'manual');
+    assert.equal(storageRequests[0].options.referrerPolicy,'no-referrer');assert.equal(storageRequests[0].options.headers,undefined);
+    assert.equal(JSON.stringify(result).includes('private'),false);
+    assert.equal(await readFile(result.path,'utf8'),'%PDF-1.4 storage fixture');
+  }finally{globalThis.fetch=originalFetch;await rm(dir,{recursive:true,force:true});}
 });
