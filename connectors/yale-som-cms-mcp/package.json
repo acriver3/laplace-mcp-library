@@ -1,0 +1,33 @@
+{
+  "name": "@withlaplace/yale-som-cms-mcp",
+  "version": "0.1.0",
+  "description": "Yale SOM career management through a dedicated local background browser",
+  "license": "MIT",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "bin": {
+    "yale-som-cms-mcp": "dist/cli.js"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "type-check": "tsc --noEmit",
+    "test": "tsc && node --test test/*.test.mjs",
+    "test:browser": "tsc && node --test test/*.browser.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "playwright-core": "1.59.1",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "25.6.0",
+    "typescript": "6.0.3"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}
