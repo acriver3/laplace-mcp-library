@@ -161,6 +161,12 @@ async function setup(callback) {
       mutations.submit(c, async (effect) => {
         state.effects.push(structuredClone(effect));
         await recordEffect(effect);
+        if (
+          effect.name === "appointment_book" &&
+          effect.status === "intended" &&
+          state.afterFinalIntent
+        )
+          await state.afterFinalIntent(page);
       }),
     capabilities: async () => ({}),
     download: async () => ({}),
@@ -223,3 +229,60 @@ test("pipeline rejects changed slots before any intent or provider effect", asyn
     assert.deepEqual(state.remote, []);
   });
 });
+
+for (const [name, alter] of [
+  [
+    "Topic",
+    () => {
+      c.appointment.Topic = "Unapproved replacement";
+    },
+  ],
+  [
+    "appointment type",
+    () => {
+      c.appointment.PreferredAppointmentTypeId = 99;
+    },
+  ],
+  [
+    "location",
+    () => {
+      c.appointment.LocationTypeId = 2;
+    },
+  ],
+  [
+    "attachments",
+    () => {
+      c.fileUploader.getFileIds = () => [999];
+    },
+  ],
+])
+  test(
+    "pipeline blocks " + name + " changes during the final journal write",
+    async () => {
+      await setup(async ({ service, state }) => {
+        const draft = await service.prepare(booking);
+        state.afterFinalIntent = (page) => page.evaluate(alter);
+        await assert.rejects(
+          () => service.commit(draft.draft_id, true),
+          { code: "submission_uncertain" },
+          "a recorded intention cannot be reported as verified after refusal",
+        );
+        assert.deepEqual(
+          state.remote,
+          [],
+          "no altered appointment reaches the provider",
+        );
+        assert.ok(
+          state.effects.some(
+            (e) => e.name === "appointment_book" && e.status === "intended",
+          ),
+        );
+        assert.equal(
+          state.effects.some(
+            (e) => e.name === "appointment_book" && e.status === "verified",
+          ),
+          false,
+        );
+      });
+    },
+  );

@@ -395,14 +395,12 @@ export class CmsMutations {
       scope =
         operation === "appointment_book"
           ? page.locator("tt-appointment-form")
-          : page
-              .locator(".modal-dialog")
-              .filter({
-                has: page.getByRole("heading", {
-                  name: "Cancel the Appointment",
-                  exact: true,
-                }),
-              });
+          : page.locator(".modal-dialog").filter({
+              has: page.getByRole("heading", {
+                name: "Cancel the Appointment",
+                exact: true,
+              }),
+            });
       final =
         operation === "appointment_book"
           ? /^Book Appointment$/i
@@ -1170,7 +1168,7 @@ export class CmsMutations {
         );
         await observeCompletion(
           opened.page,
-          () => clickAppointmentSubmit(opened.page, change),
+          () => clickAppointmentSubmit(opened.page, change, postFill),
           { form: opened.scope, finalControl },
         );
         const receipt = await verifyAppointmentOutcome(

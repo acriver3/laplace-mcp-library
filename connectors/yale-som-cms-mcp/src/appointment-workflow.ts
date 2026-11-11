@@ -456,14 +456,13 @@ export async function appointmentSubmitControl(
 export async function clickAppointmentSubmit(
   page: Page,
   change: Change,
+  expected: AppointmentWorkflow,
 ): Promise<void> {
+  // Keep the post-fill state captured before the durable final intent. A fresh
+  // snapshot here would silently approve changes during that awaited journal write.
+  validateAppointmentWorkflow(expected, change);
   await appointmentSubmitControl(page, change);
-  const workflow = await inspectAppointmentWorkflow(
-    page,
-    change.operation as AppointmentOperation,
-    change.target_id!,
-  );
-  const slot = workflow.slots.find((s) => s.slot_id === change.slot_id);
+  const slot = expected.slots.find((s) => s.slot_id === change.slot_id);
   const clicked = await page.evaluate(
     ({ change, slot, context }) => {
       if (location.origin !== "https://som-yale.12twenty.com") return false;
@@ -473,6 +472,14 @@ export async function clickAppointmentSubmit(
         c?.currentUser?.IsStudent === true &&
         String(c.currentUser.Id) === String(user?.Id) &&
         String(a?.StudentId) === String(user?.Id);
+      const nullable = (value: unknown) =>
+        value == null || value === "" ? null : String(value);
+      const iso = (x: any) =>
+        typeof x === "string" &&
+        /Z$|[+-]\d\d:\d\d$/.test(x) &&
+        Number.isFinite(Date.parse(x))
+          ? new Date(x).toISOString()
+          : null;
       let controls: Element[] = [];
       if (change.operation === "appointment_book") {
         const roots = document.querySelectorAll("tt-appointment-form");
@@ -499,14 +506,18 @@ export async function clickAppointmentSubmit(
           c.fileUploader?.hasError?.()
         )
           return false;
-        const iso = (x: any) =>
-          typeof x === "string" &&
-          /Z$|[+-]\d\d:\d\d$/.test(x) &&
-          Number.isFinite(Date.parse(x))
-            ? new Date(x).toISOString()
-            : null;
         if (
           !slot ||
+          String(a.Topic ?? "") !== String(context.topic ?? "") ||
+          ((change.fields.Topic !== undefined ||
+            change.fields.appointment__topic !== undefined) &&
+            String(a.Topic ?? "") !==
+              String(
+                change.fields.Topic ?? change.fields.appointment__topic,
+              )) ||
+          nullable(a.PreferredAppointmentTypeId) !==
+            context.preferred_appointment_type_id ||
+          nullable(a.LocationTypeId) !== context.location_type_id ||
           iso(a.StartTime) !== slot.start ||
           iso(a.EndTime) !== slot.end ||
           !c.availableTimes.some(
@@ -530,6 +541,8 @@ export async function clickAppointmentSubmit(
           !own(c, a) ||
           String(a.Id) !== change.target_id ||
           a.StatusId !== 1 ||
+          iso(a.StartTime) !== context.start ||
+          iso(a.EndTime) !== context.end ||
           !a.State?.Actions?.some(
             (x: any) => x.ActionTypeId === 10 && x.IsAvailable === true,
           )
@@ -556,7 +569,7 @@ export async function clickAppointmentSubmit(
       (controls[0] as HTMLElement).click();
       return true;
     },
-    { change, slot, context: workflow.context },
+    { change, slot, context: expected.context },
   );
   if (!clicked)
     throw new CmsError(

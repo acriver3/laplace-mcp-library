@@ -69,7 +69,12 @@ test("booking opener and exact slot selection remain local and reordering cannot
     await page.locator("textarea").fill("Fixture");
     await selectAppointmentSlot(page, change);
     const control = await appointmentSubmitControl(page, change);
-    await clickAppointmentSubmit(page, change);
+    const approved = await inspectAppointmentWorkflow(
+      page,
+      "appointment_book",
+      "42",
+    );
+    await clickAppointmentSubmit(page, change, approved);
     assert.equal(await page.evaluate(() => saveCount), 1);
     assert.equal(await page.evaluate(() => c.selectedTimeSpanId), 2);
     await page.evaluate(() => showDetail());
