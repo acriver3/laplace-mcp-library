@@ -80,30 +80,31 @@ local marketing, connector and gateway builds. The connector suite passed 576
 tests; the shared protocol suite passed 75; the WSL Desktop suite passed 474
 with one platform skip. The full log is retained locally at
 `/tmp/yale-cms-web-rebase-verify.log`. The reviewed web integration pins Desktop
-`896ba071649ece404238761894d542de9fcb1978`. No push or deployment was performed.
+`896ba071649ece404238761894d542de9fcb1978`. The feature branch was pushed; no production deployment was performed.
 
-For connector source commit `70666aa7d045dc9399334c534e6012a5b2402b71`, the
-coordinating implementation agent reported that the complete native Windows
-Chrome fixture run passed 95 of 95 tests. Native Windows unit validation
-passed 52 of 53 tests, with the symlink test skipped because creating the
-fixture symlink requires additional Windows privileges. The native logs are
-`C:\Users\duney\.codex\tmp\yale-cms-native-unit-final.log` and
-`C:\Users\duney\.codex\tmp\yale-cms-native-browser-final.log`.
+Final connector code at `eced14d550c8bf2e794c15e2b12043f87124dd29`
+passed the complete suites on both systems:
 
-WSL unit validation passed all 53 tests. Its browser run initially passed 91
-of 95 tests; four read fixtures lacked the required student TypeId. After
-correcting those fixtures, all 17 read tests passed, while the other 78 had
-passed in the earlier run. This is a combined result, not a second complete
-WSL browser run. Library `npm run verify` passed, and the dependency audit
-reported zero vulnerabilities.
+- Native Windows: 100 of 100 Chrome browser fixtures passed; 52 unit/protocol
+  tests passed and one symlink-permission fixture was skipped.
+- WSL: all 100 Chrome browser fixtures and all 53 unit/protocol tests passed.
+- Library `npm run verify` passed. The production dependency audit reported
+  zero vulnerabilities.
 
-After the event follow-up at
-`45e94c66206f0553a49f381d265ba99b055d8df4`, all 22 affected native Windows event
-tests passed. The log is
-`C:\Users\duney\.codex\tmp\yale-cms-native-event-final.log`.
-A subsequent appointment-field guard is still undergoing its affected final
-checks; the counts above certify their named source states. Sanitized
-fixtures use synthetic data and do not establish live portal acceptance.
+The final suites include native application and event document workflows,
+appointment booking/cancellation, exact final-click field and attachment
+checks, changed account/eligibility/slots, blocked preview autosaves, profile
+contention, uncertain submissions and duplicate confirmation. A changed
+appointment during final journaling produces zero provider calls and an
+honest uncertain journal outcome. Existing event-document associations remain
+partial unless the portal supplies authoritative attachment verification.
+
+Native logs are
+`C:\Users\duney\.codex\tmp\yale-cms-native-unit-final-source.log` and
+`C:\Users\duney\.codex\tmp\yale-cms-native-browser-final-source.log`.
+WSL logs are `/tmp/yale-cms-unit-final-source.log` and
+`/tmp/yale-cms-browser-final-source.log`. Sanitized fixtures use synthetic
+data and do not establish live portal acceptance.
 
 ## Native Windows Desktop evidence
 
