@@ -3,7 +3,7 @@ import { mkdir, open, readFile, realpath, unlink } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chromium, type BrowserContext, type Page } from 'playwright-core';
+import { chromium, type BrowserContext, type Page, type Route } from 'playwright-core';
 import { CMS_ORIGIN, DASHBOARD, CmsError, type Identity } from './types.js';
 
 export const DEFAULT_PROFILE = resolve(homedir(), '.laplace-local/sessions/yale-som-cms/profile');
@@ -52,12 +52,63 @@ export class ProfileLock {
   }
 }
 
+/** POST endpoints observed during authenticated student read discovery, 2026-11-11.
+ * These query existing data. Never allow an arbitrary endpoint merely because its name
+ * contains "query". Numeric resume-book IDs are the observed route parameter.
+ */
+const READ_POST_PATHS = new Set([
+  '/api/internal/entity-short-summaries',
+  '/api/internal/job-analytics/job-counts-by-attribute',
+  '/api/internal/job-analytics/pay-category-stats',
+  '/api/internal/job-analytics/salary-trends',
+  '/api/internal/tasks/post-query',
+  '/api/v2/activity-stream/recent-companies',
+  '/api/v2/activity-stream/recent-contacts',
+  '/api/v2/appointment-calendar-events/available-appointment-types-colleges/post-query',
+  '/api/v2/appointment-calendar-events/post-query',
+  '/api/v2/companies/metrics', '/api/v2/companies/query',
+  '/api/v2/educations/post-query', '/api/v2/events/post-query',
+  '/api/v2/job-postings/post-query', '/companies/getcontacts',
+]);
+
+/** Installed for the lifetime of a headless context, including after a preview ends. */
+export class ReadRequestGuard {
+  private mutationActive = false;
+  private blocked = new Map<string, {method:string;path:string}>();
+  async handle(route: Route) {
+    const request = route.request();
+    const method = request.method().toUpperCase();
+    const url = new URL(request.url());
+    if (['GET','HEAD','OPTIONS'].includes(method)) return route.fallback();
+    const sameTenant = url.origin === CMS_ORIGIN;
+    const path = url.pathname.toLowerCase();
+    const readPost = sameTenant && method === 'POST' && (READ_POST_PATHS.has(path) || /^\/api\/v2\/resume-books\/\d+\/items\/query$/.test(path));
+    if (readPost || sameTenant && this.mutationActive) return route.fallback();
+    // Third-party telemetry is blocked silently. An unknown CMS request must be
+    // reviewed explicitly; strip query strings and never inspect auth headers/body.
+    if (sameTenant) this.blocked.set(method+' '+path, {method,path});
+    return route.abort('blockedbyclient');
+  }
+  assertReadRequests() {
+    const requests = [...this.blocked.values()];
+    this.blocked.clear();
+    if (requests.length) throw new CmsError('read_request_unreviewed', 'A CMS request was blocked because it has not been verified as read-only. No request in this list was sent. Reauthenticate manually if the request belongs to sign-in.', {requests});
+  }
+  async runMutation<T>(callback:()=>Promise<T>):Promise<T> {
+    if (this.mutationActive) throw new CmsError('mutation_in_progress','Only one confirmed CMS change can run at a time.');
+    this.assertReadRequests();
+    this.mutationActive = true;
+    try { return await callback(); } finally { this.mutationActive = false; }
+  }
+}
+
 export class CmsBrowser {
   readonly profile: string;
   readonly downloadsDir: string;
   readonly lock: ProfileLock;
   private readonly packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   private context?: BrowserContext;
+  private readonly readGuard = new ReadRequestGuard();
   private currentPage?: Page;
   private opening?: Promise<Page>;
   private names = new Map<string, string>();
@@ -99,9 +150,10 @@ export class CmsBrowser {
       await mkdir(this.profile, { recursive: true, mode: 0o700 });
       this.context = await chromium.launchPersistentContext(this.profile, {
         channel: this.channel, headless: !this.headed,
-        args: ['--restore-last-session'], viewport: { width: 1440, height: 1000 },
+        viewport: { width: 1440, height: 1000 }, serviceWorkers: 'block',
         acceptDownloads: true, timeout: 30_000,
       });
+      if (!this.headed) await this.context.route('**/*', route => this.readGuard.handle(route));
       this.context.setDefaultTimeout(15_000);
       this.context.setDefaultNavigationTimeout(30_000);
       this.currentPage = this.context.pages()[0] || await this.context.newPage();
@@ -114,6 +166,8 @@ export class CmsBrowser {
       throw new CmsError('browser_unavailable', 'Could not launch the dedicated CMS browser. Install the selected Chrome/Edge channel and stop other processes using this profile.');
     }
   }
+  assertReadRequests() { this.readGuard.assertReadRequests(); }
+  async runMutation<T>(callback:()=>Promise<T>):Promise<T> { return this.readGuard.runMutation(callback); }
   async identity(): Promise<Identity> {
     const page = await this.page();
     if (page.url() === 'about:blank') await page.goto(DASHBOARD, { waitUntil: 'domcontentloaded' });
