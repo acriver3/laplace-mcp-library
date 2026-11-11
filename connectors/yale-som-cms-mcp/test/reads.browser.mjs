@@ -60,6 +60,9 @@ test('real browser search, field metadata, result pagination and query-bound cur
     assert.equal(searched.records[0].name,'Needle');assert.equal(await page.locator('select').inputValue(),'open');
     await assert.rejects(()=>reads.read({area:'jobs',filters:{status:'Missing'},limit:2}),{code:'invalid_filter_value'});
     await assert.rejects(()=>reads.read({area:'jobs',filters:{'Invented filter':'foo'},limit:2}),{code:'unsupported_filter'});
+    await page.context().unroute('**/*');
+    await page.context().route('**/*',route=>route.fulfill({contentType:'text/html',body:fixture.replaceAll('i+101','i+201')}));
+    await assert.rejects(()=>reads.read({area:'jobs',limit:2,cursor:first.next_cursor}),{code:'cursor_changed'});
   });
 });
 

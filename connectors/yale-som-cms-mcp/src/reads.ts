@@ -72,7 +72,7 @@ export async function extractReadFields(page: Page, scope = MAIN): Promise<FormF
 }
 
 type Snapshot = { title:string; text:string; links:{name:string;url:string;text:string;cells:string[];favorite?:boolean}[]; tableRows:{text:string;cells:string[]}[]; models:JsonRecord[]; filters:JsonRecord[]; total?:number; headings:string[]; context:JsonRecord; };
-type Cursor = { account:string; request:string; offset:number; expires:number; };
+type Cursor = { account:string; request:string; offset:number; prefix:string; expires:number; };
 
 export class CmsReads {
   private readonly cursors = new Map<string, Cursor>();
@@ -206,6 +206,7 @@ export class CmsReads {
       if(angular){const e=document.querySelector('tt-event-detail');const c=e&&angular.element(e).controller('ttEventDetail');if(c?.event){const event=c.event;const slots=document.querySelector('tt-time-slot-list');const sc=slots&&angular.element(slots).controller('ttTimeSlotList');const own=sc?.currentUserTimeSlot;const slotKeys=['Id','EventTimeSlotId','EventId','ScheduleId','StartTime','EndTime','slotStatus','canRegisterForTimeslot','canCancelRegistration'];context.registration_state={event_id:event.Id,is_attending:event.IsAttending,rules:safe(event.RegistrationRules),label:c.studentRegistrationLabel,current_slot:own?Object.fromEntries(slotKeys.filter(k=>own[k]!==undefined).map(k=>[k,safe(own[k])])):null};}}
       const filterElement=root.querySelector('tt-filter');
       const filter=filterElement&&angular?.element(filterElement).controller('ttFilter');
+      if(filter)context.active_filters=safe(filter.ttSelectedFilters||filter.queryCriteria?.Filters||[]);
       const filters=(filter?.availableFilters||[]).map((f:any)=>({id:f.PropertyName||f.AttributeName||f.DisplayName,label:f.DisplayName,type:f.FieldTypeId||f.TypeId,lookup_id:f.LookupId,custom_filter_type_id:f.CustomFilterTypeId}));
       const text=(root as HTMLElement).innerText;
       const totalMatch=text.match(/Results:\s*([\d,]+)/i);
@@ -329,8 +330,8 @@ export class CmsReads {
     const page=await this.navigate(input.area,input.id,input.view);
     const identity=await this.browser.identity();
     const signature=digest({...input,cursor:undefined,limit:undefined});
-    let offset=0;
-    if(input.cursor){const state=this.cursors.get(input.cursor);if(!state||state.expires<Date.now()||state.account!==identity.key||state.request!==signature)throw new CmsError('invalid_cursor','This continuation expired or belongs to another account/query. Start a fresh read.');offset=state.offset;}
+    let offset=0;let previous:Cursor|undefined;
+    if(input.cursor){const state=this.cursors.get(input.cursor);if(!state||state.expires<Date.now()||state.account!==identity.key||state.request!==signature)throw new CmsError('invalid_cursor','This continuation expired or belongs to another account/query. Start a fresh read.');offset=state.offset;previous=state;}
     await this.applyFilters(page,input);
     let snap=await this.snapshot(page,!!input.id,input.area);
     let records=this.records(input.area,snap,input.id);
@@ -348,10 +349,12 @@ export class CmsReads {
       records=[match];offset=0;
     }
     if(input.start||input.end)records=records.filter(inRange);
+    if(previous&&digest(records.slice(0,offset).map(r=>r.id))!==previous.prefix)throw new CmsError('cursor_changed','CMS result ordering changed since this continuation was issued. Start a fresh read to avoid missing or duplicating records.');
     const availableMore=records.length>offset+input.limit || (!!snap.total&&snap.total>records.length) || loadedMore===20;
     let cursor:string|undefined;
-    if(availableMore){cursor=randomUUID();this.cursors.set(cursor,{account:identity.key,request:signature,offset:offset+input.limit,expires:Date.now()+600_000});}
+    if(availableMore){cursor=randomUUID();this.cursors.set(cursor,{account:identity.key,request:signature,offset:offset+input.limit,prefix:digest(records.slice(0,offset+input.limit).map(r=>r.id)),expires:Date.now()+600_000});}
     for(const [key,state]of this.cursors)if(state.expires<Date.now())this.cursors.delete(key);
+    while(this.cursors.size>100)this.cursors.delete(this.cursors.keys().next().value!);
     const selected=records.slice(offset,offset+input.limit);
     const text=input.id||!records.length?snap.text.slice(0,60000):selected.map(r=>String(r.text||r.name)).join('\n\n').slice(0,60000);
     return {area:input.area,url:page.url(),title:snap.title,timezone:TIMEZONE,text,records:selected,fields:await extractReadFields(page),filters:snap.filters,
