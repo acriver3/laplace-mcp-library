@@ -37,6 +37,29 @@ Desktop authentication runs the login command. Setup verification calls only
 `cms_session_status` and `cms_get_dashboard`; it does not submit applications,
 register for events, book appointments or change a profile.
 
+## Reviewed native workflow boundaries
+
+The source includes dedicated adapters for a new native job application,
+new event registration and appointment booking/cancellation. Application and
+event documents are bound to the portal's stable requirement IDs. Existing
+document selection, approved local uploads and optional materials-library
+copies are separate, previewed effects. Applications with custom questions,
+office ranking, bidding, approved-resume-only requirements or external
+application destinations require interactive completion. Event surveys,
+external instructions and core-event slot-locking flows are also excluded.
+
+Appointment booking binds an available block and exact UTC start/end slot;
+cancellation binds the student's existing active appointment. Editing,
+rescheduling, attendance tracking and queues are outside this native adapter.
+Unsupported custom controls or ambiguous records fail closed. No adapter
+uses a completion message or settled network request alone as success:
+verification requires the expected own record/state, and document linkage
+or optional library saves may remain partial or uncertain.
+
+These are implementation boundaries, not claims of live write acceptance.
+The workflow and service-integration fixtures remain distinct from the
+account-level checks and native artifact evidence below.
+
 ## Automated evidence
 
 The Desktop catalog/runtime implementation was checked on WSL with 29 shared
@@ -59,14 +82,28 @@ with one platform skip. The full log is retained locally at
 `/tmp/yale-cms-web-rebase-verify.log`. The reviewed web integration pins Desktop
 `896ba071649ece404238761894d542de9fcb1978`. No push or deployment was performed.
 
-For the connector package, the coordinating implementation agent reported a
-successful native Windows unit run with 53 tests: 52 passed and one platform
-symlink test skipped, after correcting the staging manifest. A native Chrome
-fixture run passed 47 tests. The dependency audit reported zero
-vulnerabilities. Subsequent completion-observer and workflow integration
-additions are undergoing final combined validation; these earlier counts do
-not certify that later source state. Sanitized fixtures use synthetic data
-and do not establish live portal acceptance.
+For connector source commit `70666aa7d045dc9399334c534e6012a5b2402b71`, the
+coordinating implementation agent reported that the complete native Windows
+Chrome fixture run passed 95 of 95 tests. Native Windows unit validation
+passed 52 of 53 tests, with the symlink test skipped because creating the
+fixture symlink requires additional Windows privileges. The native logs are
+`C:\Users\duney\.codex\tmp\yale-cms-native-unit-final.log` and
+`C:\Users\duney\.codex\tmp\yale-cms-native-browser-final.log`.
+
+WSL unit validation passed all 53 tests. Its browser run initially passed 91
+of 95 tests; four read fixtures lacked the required student TypeId. After
+correcting those fixtures, all 17 read tests passed, while the other 78 had
+passed in the earlier run. This is a combined result, not a second complete
+WSL browser run. Library `npm run verify` passed, and the dependency audit
+reported zero vulnerabilities.
+
+After the event follow-up at
+`45e94c66206f0553a49f381d265ba99b055d8df4`, all 22 affected native Windows event
+tests passed. The log is
+`C:\Users\duney\.codex\tmp\yale-cms-native-event-final.log`.
+A subsequent appointment-field guard is still undergoing its affected final
+checks; the counts above certify their named source states. Sanitized
+fixtures use synthetic data and do not establish live portal acceptance.
 
 ## Native Windows Desktop evidence
 
@@ -119,8 +156,9 @@ appointment booking, document upload or profile change was used as a test.
 
 ## Pending live acceptance
 
-The dedicated-profile sign-in attempt timed out. No completed authentication
-or restart persistence has been verified for that connector profile. Native
+The initial dedicated-profile sign-in attempt timed out. A later visible
+login window was reopened, but no completed authentication or restart
+persistence has been verified for that connector profile. Native
 Desktop fixture/package success and ordinary-Chrome discovery are separate
 from this pending authenticated acceptance.
 
@@ -147,6 +185,41 @@ in `npm-shrinkwrap.json`, publishes the exact tarball with lifecycle scripts
 disabled and verifies registry integrity. The published package records its
 source commit in `laplace.libraryCommit`; that immutable value is the source
 provenance for the release.
+
+The publisher also enforces the clean `origin/main` requirement during a dry
+run. It fetches origin first, rejects tracked or untracked changes and rejects
+an existing npm version. It runs the package build and `npm test`, packs a
+shrinkwrapped tarball and prints its source commit, file count and integrity.
+It does not run the browser fixtures, install the CMS package into Desktop
+or authenticate a user. A dry run does not publish and its temporary staging
+directory is removed when it finishes; the real publication rebuilds.
+
+After the coordinator has integrated and pushed the validated source while
+keeping this catalog entry unpublished, use a clean release checkout with
+Node 24+, Git, tar, installed Chrome and npm registry access. From the library
+root:
+
+```sh
+git fetch origin main
+git status --porcelain
+git rev-parse HEAD origin/main
+npm ci --ignore-scripts
+npm run verify
+npm --prefix connectors/yale-som-cms-mcp ci --ignore-scripts --workspaces=false
+npm --prefix connectors/yale-som-cms-mcp run type-check
+npm --prefix connectors/yale-som-cms-mcp test
+npm --prefix connectors/yale-som-cms-mcp run test:browser
+npm run publish:npm -- yale-som-cms-mcp 0.1.0 --dry-run
+```
+
+The status output must be empty and both SHAs must match; do not rewrite remote
+tracking refs to satisfy this gate. Record the dry-run output with the final
+source checks. Before actual publication, separately confirm npm authentication
+and permission to publish `@withlaplace/yale-som-cms-mcp`; use npm's interactive
+login/MFA flow without storing credentials in this repository. Publication,
+registry integrity verification, installation of the published package and
+authenticated Desktop acceptance remain separate steps. Do not activate the
+catalog from a dry-run result or inherit acceptance from a prior build.
 
 As of this review update on 2026-11-11, the source/package candidate remains
 unpublished. The npm web-login attempt expired, and registry authentication

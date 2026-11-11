@@ -5,12 +5,20 @@ Local stdio MCP for the Yale School of Management career platform at
 The npm package is `@withlaplace/yale-som-cms-mcp`. The initial catalog target is
 Windows x64, with Node 24 and installed Chrome or Edge.
 
+As of 2026-11-11, version 0.1.0 is an **unpublished candidate**. The commands below
+apply after publication; the catalog does not currently offer this candidate
+for installation. See the [candidate review](https://github.com/acriver3/laplace-mcp-library/blob/main/reviews/yale-som-cms-mcp.md)
+for completed checks and pending authenticated acceptance.
+
 ## Sign in once, then use the background browser
 
 Laplace Desktop installs an exact package version with npm integrity checks.
 Authenticate opens a **visible, dedicated browser window**. Complete Yale or
 12twenty sign-in and any MFA yourself. The connector then reuses that saved
-profile in headless Chrome or Edge for normal MCP calls.
+profile in headless Chrome or Edge for normal MCP calls. Wait for the login
+command to report success and close its window before starting the server.
+Stop any process using that profile before signing in again or running a
+separate status command.
 
 This is not a tether to your everyday Chrome tab. It does not import cookies,
 attach to your personal browser, or ask for passwords in chat. Opening CMS in
@@ -78,10 +86,12 @@ cohort, filters and currency; suppressed or unavailable values are not inferred.
 
 ## Confirmed changes
 
-Changes cover student-permitted applications, registration and scheduling,
-documents and resume books, profile and education/experience, employment or
-offer reporting, tasks, targets, saved searches and alerts. Available actions
-and required fields depend on your account and the current portal.
+The adapter exposes operations for student applications, registration and
+scheduling, documents and resume books, profile and education/experience,
+employment or offer reporting, tasks, targets, saved searches and alerts.
+An operation is usable only when the account exposes its supported form,
+controls and permissions. Listing an operation is not a promise that every
+custom form or account configuration is supported.
 
 1. Use the appropriate read tool to identify the record and exact slot.
 2. Call `cms_get_form` with `operation`, `area`, and any required
@@ -120,6 +130,34 @@ Native CMS application submission is separate from an employer's external
 application site. External applications return a handoff link. External
 calendar/account linking and consent remain interactive.
 
+## Reviewed native application, event and appointment flows
+
+These adapters follow the native CMS student forms and bind each action to
+the signed-in student and exact record. Their automated coverage uses
+synthetic browser fixtures; it is separate from live account acceptance.
+
+| Workflow | Supported form | Interactive completion required |
+| --- | --- | --- |
+| Job application | A new native CMS application for an eligible posting, with reviewed document requirements. Choose each exact existing document or approved local upload, its name and whether to save a copy to application materials. | External, email, fax or mail applications; custom questions; office rankings; bidding; approved-resume-only requirements; URL/current-document modes; external document-service consent or additional steps. |
+| Event registration | A new registration with either confirmation alone or documents followed by confirmation. The exact event and any selected slot are bound to the preview. Available existing documents and local uploads are supported; a waitlist outcome remains a waitlist outcome. | Surveys, custom questions or consent, external registration instructions, core-event reservation/slot-locking flows, URL/current-document modes or unrecognized steps. |
+| Appointment | A new booking from an available appointment block, with an exact returned slot and the form's supported fields/uploads; cancellation of the student's own active appointment when CMS permits it. | Editing or rescheduling an existing appointment, attendance tracking, queues, unavailable slots or forms whose controls cannot be bound unambiguously. |
+
+For appointment booking, use the available-block ID as `target_id` and choose
+`slot_id` from `cms_get_form`. The slot binds the block and exact UTC start/end
+times, so a reordered list cannot select another appointment. Cancellation
+uses the booked appointment ID and accepts no slot, fields or files. A
+reschedule is not performed as an implicit cancel-and-rebook operation.
+
+Application and event document field IDs include the document requirement ID,
+for example `document:<id>:type`, `document:<id>:existing` and
+`document:<id>:file`. Copy the returned identifiers and choices; repeated
+labels such as "Resume" do not identify a unique requirement. Unknown fields,
+duplicate controls, changed requirements or unsupported custom forms return
+an explicit error or an unsupported-form result. Complete those workflows
+interactively instead of substituting another action. In particular, an
+employer's external application and CMS "Mark as Applied" are different
+actions.
+
 ## Files and compound outcomes
 
 `cms_download_document` accepts a permitted document or resource ID and an
@@ -138,6 +176,14 @@ clicking Apply are separate remote effects. The preview lists intended
 effects; each is journaled before execution. A partially completed operation
 is not atomic and is not described as rolled back. Waitlisted or pending
 approval is reported as that state, not a confirmed registration.
+
+The connector waits for the final action and its captured write requests to
+settle before reading the resulting record. A successful HTTP response, a
+closed form or success text alone does not prove the intended change. The
+result must identify the expected student, record and state. Upload
+acknowledgment is also separate from proof that the exact document was linked
+to the application, registration or appointment; missing attachment or
+library-save evidence can leave the result partial or uncertain.
 
 ## Uncertain submissions and recovery
 
@@ -162,7 +208,7 @@ process. Recovery flags are valid only with `status`.
 
 ## Development and validation
 
-From this package directory:
+The browser fixture suite requires installed Chrome. From this package directory:
 
 ```sh
 npm ci --ignore-scripts --workspaces=false
@@ -174,8 +220,16 @@ npm run test:browser
 Core and protocol tests cover exact previews, expiry, duplicate confirmation,
 account/state changes, changed files, durable effect journals, interrupted and
 partial submissions, recovery, cancellation and real stdio initialization.
-Browser fixtures use sanitized synthetic content and must intercept requests
-so they cannot contact Yale.
+Browser fixtures use sanitized synthetic content and intercept requests so
+they cannot contact Yale. The native workflow fixtures exercise exact
+student/record/slot binding, multiple document requirements, upload
+acknowledgments, delayed final responses, authoritative receipts, unsupported
+forms and changed-state rejection. These checks do not submit real
+applications, register a user for an event or book appointments.
+
+The release publisher runs the package build and `npm test`, but does not run
+`npm run test:browser` or authenticate a real account. Run and record those
+separate checks for the final source before release.
 
 Passing fixtures does not establish live write acceptance. Release evidence
 must separately identify authenticated read checks, dedicated-profile login

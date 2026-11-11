@@ -35,6 +35,12 @@ These pages cover Desktop and CLI installation, existing-connection reuse, authe
 | [Outlook](connectors/msoutlook-mcp/README.md) | `@withlaplace/msoutlook-mcp` | 0.5.0-laplace.2 | Windows x64, macOS Intel, macOS Apple Silicon | Node; Chrome/Edge |
 | [Slack](connectors/slack-mcp-server/README.md) | `@withlaplace/slack-mcp-server` | 1.1.0-laplace.2 | Windows x64, macOS Intel, macOS Apple Silicon, Linux x64 | Node launcher with Patchright; Go server from `@withlaplace/slack-mcp-server-<os>-<cpu>` |
 
+[Yale SOM CMS [Background Browser]](connectors/yale-som-cms-mcp/README.md) is an
+unpublished 0.1.0 candidate targeting Windows x64 with Node 24 and Chrome/Edge.
+Its catalog entry remains unavailable for installation. The
+[candidate review](reviews/yale-som-cms-mcp.md) separates synthetic/native
+validation from pending dedicated-profile authentication and live acceptance.
+
 Each catalog entry names the npm `package`, `distTag`, `bin`, launch `args` and
 `env`. Values may use `${user_config.<key>}` (a setting from the connector's
 `manifest.json`) and `${package_dir}` (the installed package directory). The entry
@@ -101,16 +107,17 @@ Laplace Local versions still read them. No new bundles are built.
 
 `connectors/` contains source, manifests, lockfiles, licenses and provenance.
 Connector sources for Canvas, LinkedIn and Outlook track pinned upstream commits
-with Laplace patches recorded in the catalog; Yale SOM EMS is first-party code whose
-canonical source is `connectors/yale-som-ems-mcp`. Historical review notes are in
+with Laplace patches recorded in the catalog. Yale SOM EMS and Yale SOM CMS are
+first-party code with canonical sources in `connectors/yale-som-ems-mcp` and
+`connectors/yale-som-cms-mcp`, respectively. Historical review notes are in
 `reviews/`; references to the Laplace monorepo in those records describe the
 original release process.
 
 Each connector retains its own license and attribution. The root MIT license
 covers the inherited Slack fork; it does not override connector licenses. In
-particular, Yale SOM EMS is first-party proprietary code with its own LICENSE.
-Third-party dependencies retain their licenses; Slack's platform packages carry
-the Go and Go module notices.
+particular, Yale SOM EMS is first-party proprietary code with its own LICENSE;
+Yale SOM CMS has its own MIT LICENSE. Third-party dependencies retain their
+licenses; Slack's platform packages carry the Go and Go module notices.
 
 ## Connector setup links
 
