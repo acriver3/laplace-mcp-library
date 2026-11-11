@@ -339,6 +339,25 @@ export async function selectAppointmentSlot(
   page: Page,
   change: Change,
 ): Promise<AppointmentWorkflow> {
+  await page.waitForFunction(
+    () => {
+      const w = window as any;
+      const e = document.querySelector("tt-appointment-form");
+      const c = e && w.angular?.element(e).controller("ttAppointmentForm");
+      const injector = w.angular?.element(document.body).injector();
+      const pending = injector?.has("$http")
+        ? injector.get("$http").pendingRequests
+        : [];
+      return (
+        c?.isInitialized &&
+        !pending.some((r: any) =>
+          /appointment-blocks|appointment-booking/.test(r.url),
+        )
+      );
+    },
+    undefined,
+    { timeout: 20_000 },
+  );
   const before = await inspectAppointmentWorkflow(
     page,
     "appointment_book",
@@ -702,6 +721,13 @@ export async function verifyAppointmentOutcome(
       status_id: a.StatusId,
       start: iso(a.StartTime),
       end: iso(a.EndTime),
+      topic: a.Topic == null ? null : String(a.Topic),
+      preferred_appointment_type_id:
+        a.PreferredAppointmentTypeId == null
+          ? null
+          : String(a.PreferredAppointmentTypeId),
+      location_type_id:
+        a.LocationTypeId == null ? null : String(a.LocationTypeId),
       attachment_file_ids: Array.isArray(a.Attachments)
         ? a.Attachments.filter(
             (x: any) => x?.FileId !== undefined && x?.FileId !== null,
@@ -719,6 +745,11 @@ export async function verifyAppointmentOutcome(
         state.status_id === 1 &&
         state.start === expectedSlot?.start &&
         state.end === expectedSlot?.end &&
+        (!Object.hasOwn(change.fields, "Topic") ||
+          state.topic === String(change.fields.Topic)) &&
+        state.preferred_appointment_type_id ===
+          workflow.context.preferred_appointment_type_id &&
+        state.location_type_id === workflow.context.location_type_id &&
         currentUrl.searchParams.get("appointmentId") === state.appointment_id);
   if (!valid)
     return {

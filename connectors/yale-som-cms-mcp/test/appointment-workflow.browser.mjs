@@ -29,9 +29,9 @@ const html = `<!doctype html><body><main><section class="block-modal"><button tt
 window.TT={CurrentSession:{CurrentUser:{Id:123,TypeId:2}}};const user={Id:123,IsStudent:true,IsAdministrator:false};window.saveCount=0;window.cancelCount=0;
 const time=(x)=>({toISOString:()=>x});const block={Id:42,State:{Actions:[{ActionTypeId:8,IsAvailable:true}]}};
 window.c={isInitialized:true,isStudent:true,isAdmin:false,currentUser:user,appointmentBookingConfigInfo:{},form:{$valid:false},fileUploader:{isUploading:false,hasError:()=>false,getFileIds:()=>[]},appointment:{Id:0,isNew:true,hasBlock:true,StudentId:123,AppointmentBlockId:42,AppointmentBlock:block,StartTime:'${start}',EndTime:'${end}',IsAttendanceTracking:false,PreferredAppointmentTypeId:7},availableTimes:[{id:1,start:time('${start}'),end:time('${end}')},{id:2,start:time('2027-01-05T15:00:00.000Z'),end:time('2027-01-05T15:30:00.000Z')}],setAppointmentTimes(t){this.appointment.StartTime=t.start.toISOString();this.appointment.EndTime=t.end.toISOString();this.selectedTimeSpanId=t.id;}};
-window.detail={currentUser:user,appointment:{Id:77,StudentId:123,AppointmentBlockId:42,StatusId:1,State:{Actions:[{ActionTypeId:10,IsAvailable:true}]},StartTime:'${start}',EndTime:'${end}',Attachments:[{FileId:901}]}};
+window.detail={currentUser:user,appointment:{Id:77,StudentId:123,AppointmentBlockId:42,StatusId:1,PreferredAppointmentTypeId:7,Topic:'Fixture',State:{Actions:[{ActionTypeId:10,IsAvailable:true}]},StartTime:'${start}',EndTime:'${end}',Attachments:[{FileId:901}]}};
 window.angular={element(e){return {data(k){return {$ctrl:{block}}},controller(name){return name==='ttAppointmentForm'?c:name==='ttAppointmentDetail'?detail:name==='ttAppointmentHome'?{showDetailSlideout(){showDetail();detail.appointment.StatusId=2;}}:null},injector(){return {has:()=>false}}}}};
-function openForm(){document.querySelector('main').innerHTML='<tt-appointment-form><form><label>Topic<textarea name="Topic" oninput="c.form.$valid=!!this.value"></textarea></label><button type="button" tt-click="$ctrl.save()" onclick="saveCount++">Book Appointment</button></form></tt-appointment-form>';history.replaceState({},'', '/appointments/create?blockId=42');}
+function openForm(){document.querySelector('main').innerHTML='<tt-appointment-form><form><label>Topic<textarea name="Topic" oninput="c.form.$valid=!!this.value;c.appointment.Topic=this.value"></textarea></label><button type="button" tt-click="$ctrl.save()" onclick="saveCount++">Book Appointment</button></form></tt-appointment-form>';history.replaceState({},'', '/appointments/create?blockId=42');}
 window.showDetail=()=>{document.querySelector('main').innerHTML='<tt-appointment-home></tt-appointment-home><tt-appointment-detail><button ng-click="$ctrl.cancelAppointment()" onclick="openCancel()">Cancel Appointment</button></tt-appointment-detail>';history.replaceState({},'', '/appointments/?appointmentId=77');};
 window.openCancel=()=>document.body.insertAdjacentHTML('beforeend','<section class="modal-dialog"><h3>Cancel the Appointment</h3><button onclick="cancelCount++;detail.appointment.StatusId=2;this.parentElement.remove()">Yes, cancel it</button></section>');
 </script>`;
@@ -163,6 +163,64 @@ test("receipt never treats a different student or mismatched appointment time as
       (await verifyAppointmentOutcome(page, change, workflow, 20)).verified,
       false,
     );
+    assert.equal(await page.evaluate(() => saveCount), 0);
+  });
+});
+
+test("receipts preserve approved Topic, appointment type, and location", async () => {
+  await fixture(async (page) => {
+    const workflow = await openAppointmentWorkflow(page, change);
+    await page.evaluate(() => {
+      showDetail();
+      detail.appointment.Topic = "Changed remotely";
+    });
+    assert.equal(
+      (await verifyAppointmentOutcome(page, change, workflow, 100)).verified,
+      false,
+    );
+    await page.evaluate(() => {
+      detail.appointment.Topic = "Fixture";
+      detail.appointment.PreferredAppointmentTypeId = 99;
+    });
+    assert.equal(
+      (await verifyAppointmentOutcome(page, change, workflow, 100)).verified,
+      false,
+    );
+    await page.evaluate(() => {
+      detail.appointment.PreferredAppointmentTypeId = 7;
+      detail.appointment.LocationTypeId = 2;
+    });
+    assert.equal(
+      (await verifyAppointmentOutcome(page, change, workflow, 100)).verified,
+      false,
+    );
+  });
+});
+
+test("slot selection waits for appointment-type availability queries before matching time", async () => {
+  await fixture(async (page) => {
+    await openAppointmentWorkflow(page, change);
+    await page.evaluate(() => {
+      const original = angular.element;
+      window.pending = [
+        { url: "/api/v2/appointment-blocks/available-booking-times" },
+      ];
+      angular.element = (e) => {
+        const value = original(e);
+        value.injector = () => ({
+          has: () => true,
+          get: () => ({ pendingRequests: window.pending }),
+        });
+        return value;
+      };
+      setTimeout(() => {
+        c.availableTimes.shift();
+        window.pending = [];
+      }, 80);
+    });
+    await assert.rejects(() => selectAppointmentSlot(page, change), {
+      code: "invalid_slot",
+    });
     assert.equal(await page.evaluate(() => saveCount), 0);
   });
 });
