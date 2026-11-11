@@ -1,0 +1,70 @@
+{
+  "manifest_version": "0.3",
+  "name": "yale-som-cms-mcp",
+  "display_name": "Yale SOM CMS [Background Browser]",
+  "version": "0.1.0",
+  "description": "Read and manage Yale SOM student career workflows through a dedicated local background browser, with confirmed changes.",
+  "author": {
+    "name": "Laplace",
+    "url": "https://github.com/acriver3/laplace-mcp-library"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/acriver3/laplace-mcp-library"
+  },
+  "license": "MIT",
+  "server": {
+    "type": "node",
+    "entry_point": "dist/cli.js",
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/dist/cli.js",
+        "serve",
+        "--profile-dir",
+        "${user_config.profile_dir}",
+        "--browser",
+        "${user_config.browser}",
+        "--downloads-dir",
+        "${user_config.downloads_dir}"
+      ]
+    }
+  },
+  "compatibility": {
+    "platforms": ["win32"],
+    "runtimes": {
+      "node": ">=24"
+    }
+  },
+  "tools_generated": true,
+  "user_config": {
+    "profile_dir": {
+      "type": "directory",
+      "title": "Dedicated Yale SOM CMS profile",
+      "description": "Private CMS browser session outside the installed package and ordinary Chrome profile.",
+      "required": true,
+      "default": "${HOME}/.laplace-local/sessions/yale-som-cms/profile"
+    },
+    "browser": {
+      "type": "string",
+      "title": "Browser channel",
+      "description": "Installed Google Chrome or Microsoft Edge, used consistently for login and background operation.",
+      "enum": ["chrome", "msedge"],
+      "default": "chrome"
+    },
+    "downloads_dir": {
+      "type": "directory",
+      "title": "CMS download folder",
+      "description": "Destination for explicitly requested documents, separate from the browser profile.",
+      "required": true,
+      "default": "${HOME}/Documents/Yale SOM CMS"
+    }
+  },
+  "_meta": {
+    "com.withlaplace.catalog": {
+      "npm_package": "@withlaplace/yale-som-cms-mcp",
+      "platforms": ["win32-x64"],
+      "source_subdirectory": "connectors/yale-som-cms-mcp"
+    }
+  }
+}
