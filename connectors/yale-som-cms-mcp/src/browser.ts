@@ -9,7 +9,13 @@ import {
   type Page,
   type Route,
 } from "playwright-core";
-import { CMS_ORIGIN, DASHBOARD, CmsError, type Identity } from "./types.js";
+import {
+  CMS_ORIGIN,
+  DASHBOARD,
+  TIMEZONE,
+  CmsError,
+  type Identity,
+} from "./types.js";
 
 export const DEFAULT_PROFILE = resolve(
   homedir(),
@@ -106,6 +112,7 @@ const READ_POST_PATHS = new Set([
   "/api/v2/activity-stream/recent-contacts",
   "/api/v2/appointment-calendar-events/available-appointment-types-colleges/post-query",
   "/api/v2/appointment-calendar-events/post-query",
+  "/api/v2/appointment-blocks/available-booking-times",
   "/api/v2/companies/metrics",
   "/api/v2/companies/query",
   "/api/v2/educations/post-query",
@@ -230,6 +237,7 @@ export class CmsBrowser {
       channel: this.channel,
       headless: !this.headed,
       viewport: { width: 1440, height: 1000 },
+      timezoneId: TIMEZONE,
       serviceWorkers: "block",
       acceptDownloads: true,
       timeout: 30_000,
@@ -254,10 +262,17 @@ export class CmsBrowser {
       await realpath(ancestor),
       relative(ancestor, this.profile),
     );
-    if (isInside(await realpath(this.packageRoot), target))
+    if (
+      isInside(await realpath(this.packageRoot), target) ||
+      target === homedir() ||
+      dirname(target) === target ||
+      /(?:Google[\\/]Chrome|Microsoft[\\/]Edge|Chromium)[\\/](?:User Data|Default)(?:[\\/]|$)/i.test(
+        target,
+      )
+    )
       throw new CmsError(
         "invalid_profile",
-        "The resolved CMS profile must stay outside the installed package.",
+        "The resolved CMS profile must be dedicated and outside the installed package and everyday browser profiles.",
       );
     await this.lock.acquire();
     try {
@@ -351,12 +366,17 @@ export class CmsBrowser {
             .replace(/\s+/g, " ")
             .trim()
         : "";
-      return { id: String(user.Id), name };
+      return { id: String(user.Id), name, type: user.TypeId };
     });
     if (!found)
       throw new CmsError(
         "auth_required",
         "The CMS session expired or sign-in is incomplete. Run login with this same dedicated profile and complete Yale/12twenty sign-in yourself.",
+      );
+    if (found.type !== 2)
+      throw new CmsError(
+        "account_not_student",
+        "Use a Yale SOM student account. Employer and administrator actions are outside this connector.",
       );
     if (found.name) this.names.set(found.id, found.name);
     return {

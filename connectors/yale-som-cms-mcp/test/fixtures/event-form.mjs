@@ -1,6 +1,8 @@
 // Sanitized observed native tt-edit-registration documents/confirmation DOM.
 export function installEventForm(options) {
-  const docs = (options.docs || [{ id: "101", title: "Resume", required: true }]).map((input) => {
+  const docs = (
+    options.docs || [{ id: "101", title: "Resume", required: true }]
+  ).map((input) => {
     const d = {
       eventRegistrationDocumentTypeId: Number(input.id),
       registrationDocumentTypeCoreId: 1,
@@ -72,7 +74,14 @@ export function installEventForm(options) {
   const escape = (value) =>
     String(value).replace(
       /[&<>"']/g,
-      (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
+      (c) =>
+        ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        })[c],
     );
   window.events = [];
   window.TT = {
@@ -101,7 +110,14 @@ export function installEventForm(options) {
               '<input type="file" uploader="service" hidden></div>' +
               '<div data-existing><select ng-model="model.ExistingApplicationDocumentId"><option value="">Choose</option>' +
               d.existing
-                .map((x) => '<option value="number:' + x.Id + '">' + escape(x.Name) + "</option>")
+                .map(
+                  (x) =>
+                    '<option value="number:' +
+                    x.Id +
+                    '">' +
+                    escape(x.Name) +
+                    "</option>",
+                )
                 .join("") +
               "</select></div></form></div>",
           )
@@ -112,7 +128,8 @@ export function installEventForm(options) {
           d = docs[i];
         row.requirement = d;
         const visibility = () => {
-          row.querySelector("[data-upload]").style.display = d.type === "upload" ? "block" : "none";
+          row.querySelector("[data-upload]").style.display =
+            d.type === "upload" ? "block" : "none";
           row.querySelector("[data-existing]").style.display =
             d.type === "existing" ? "block" : "none";
         };
@@ -130,41 +147,59 @@ export function installEventForm(options) {
           d.Name = name.value;
           window.events.push("fields:" + d.eventRegistrationDocumentTypeId);
         });
-        row.querySelector('input[type="checkbox"]').checked = d.saveToApplicationMaterialsLibrary;
-        row.querySelector('input[type="checkbox"]').addEventListener("change", (e) => {
-          d.saveToApplicationMaterialsLibrary = e.target.checked;
-          window.events.push("fields:" + d.eventRegistrationDocumentTypeId);
-        });
+        row.querySelector('input[type="checkbox"]').checked =
+          d.saveToApplicationMaterialsLibrary;
+        row
+          .querySelector('input[type="checkbox"]')
+          .addEventListener("change", (e) => {
+            d.saveToApplicationMaterialsLibrary = e.target.checked;
+            window.events.push("fields:" + d.eventRegistrationDocumentTypeId);
+          });
         row.querySelector("select").value = d.ExistingApplicationDocumentId
           ? "number:" + d.ExistingApplicationDocumentId
           : "";
         row.querySelector("select").addEventListener("change", (e) => {
-          d.ExistingApplicationDocumentId = Number(e.target.value.replace("number:", ""));
+          d.ExistingApplicationDocumentId = Number(
+            e.target.value.replace("number:", ""),
+          );
           window.events.push("fields:" + d.eventRegistrationDocumentTypeId);
         });
-        row.querySelector('input[type="file"]').addEventListener("change", async () => {
-          window.events.push("upload:" + d.eventRegistrationDocumentTypeId);
-          await window.fixtureUpload?.(String(d.eventRegistrationDocumentTypeId));
-          if (options.failUpload === String(d.eventRegistrationDocumentTypeId))
-            d.fileService.error = true;
-          else d.fileService.files = [{ FileId: "file-" + d.eventRegistrationDocumentTypeId }];
-        });
+        row
+          .querySelector('input[type="file"]')
+          .addEventListener("change", async () => {
+            window.events.push("upload:" + d.eventRegistrationDocumentTypeId);
+            await window.fixtureUpload?.(
+              String(d.eventRegistrationDocumentTypeId),
+            );
+            if (
+              options.failUpload === String(d.eventRegistrationDocumentTypeId)
+            )
+              d.fileService.error = true;
+            else
+              d.fileService.files = [
+                { FileId: "file-" + d.eventRegistrationDocumentTypeId },
+              ];
+          });
         visibility();
       }
-      host.querySelector('[ng-click="$ctrl.continue()"]').addEventListener("click", (e) => {
-        e.preventDefault();
-        c.continue();
-        render();
-      });
+      host
+        .querySelector('[ng-click="$ctrl.continue()"]')
+        .addEventListener("click", (e) => {
+          e.preventDefault();
+          c.continue();
+          render();
+        });
     } else {
       host.innerHTML =
         '<section ng-if="$ctrl.currentStepId == $ctrl.confirmationStepId"><div>Are you sure you want to register for this event?</div><a role="button" tt-click="$ctrl.save()" href="#">Register</a></section>';
-      host.querySelector('[tt-click="$ctrl.save()"]').addEventListener("click", (e) => {
-        e.preventDefault();
-        window.events.push("submit");
-        c.isRegistrationBeingSubmitted = true;
-        void window.fixtureOnSubmit?.(c);
-      });
+      host
+        .querySelector('[tt-click="$ctrl.save()"]')
+        .addEventListener("click", (e) => {
+          e.preventDefault();
+          window.events.push("submit");
+          c.isRegistrationBeingSubmitted = true;
+          void window.fixtureOnSubmit?.(c);
+        });
     }
   };
   window.angular = {

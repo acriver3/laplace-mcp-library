@@ -15,7 +15,11 @@ import { installApplicationForm } from "./fixtures/application-form.mjs";
 
 let browser, directory, file;
 before(async () => {
-  browser = await chromium.launch({ channel: "chrome", headless: true, args: ["--no-sandbox"] });
+  browser = await chromium.launch({
+    channel: "chrome",
+    headless: true,
+    args: ["--no-sandbox"],
+  });
   directory = await mkdtemp(join(tmpdir(), "cms-application-fixture-"));
   file = join(directory, "resume.pdf");
   await writeFile(file, "%PDF-1.7 sanitized fixture");
@@ -27,7 +31,10 @@ after(async () => {
 async function fixture(t, options = {}) {
   const context = await browser.newContext();
   await context.route("**/*", (route) =>
-    route.request().url().startsWith("https://som-yale.12twenty.com/jobPostings")
+    route
+      .request()
+      .url()
+      .startsWith("https://som-yale.12twenty.com/jobPostings")
       ? route.fulfill({
           status: 200,
           contentType: "text/html",
@@ -51,13 +58,15 @@ const request = (extra) => ({
   files: [],
   ...extra,
 });
-const rejects = (promise, code) => assert.rejects(promise, (e) => e.code === code);
+const rejects = (promise, code) =>
+  assert.rejects(promise, (e) => e.code === code);
 const recorder =
   (page, entries = [], hook) =>
   async (effect) => {
     entries.push(structuredClone(effect));
     await page.evaluate(
-      (effect) => window.effects.push("journal:" + effect.status + ":" + effect.name),
+      (effect) =>
+        window.effects.push("journal:" + effect.status + ":" + effect.name),
       effect,
     );
     await hook?.(effect);
@@ -88,14 +97,20 @@ test("required file, unknown fields, conflicting sources, invalid extension and 
     (e) => e.code === "required_file",
   );
   assert.throws(
-    () => validateApplicationWorkflow(form, request({ fields: { arbitrary: true } })),
+    () =>
+      validateApplicationWorkflow(
+        form,
+        request({ fields: { arbitrary: true } }),
+      ),
     (e) => e.code === "invalid_field",
   );
   assert.throws(
     () =>
       validateApplicationWorkflow(
         form,
-        request({ files: [{ field: "document:101:file", path: "/tmp/resume.exe" }] }),
+        request({
+          files: [{ field: "document:101:file", path: "/tmp/resume.exe" }],
+        }),
       ),
     (e) => e.code === "invalid_file",
   );
@@ -125,7 +140,10 @@ test("duplicate native document IDs stay scoped; uploads are journaled before in
   const result = await fillApplicationWorkflow(
     page,
     request({
-      fields: { "document:102:name": "Approved Cover", "document:102:save_to_library": true },
+      fields: {
+        "document:102:name": "Approved Cover",
+        "document:102:save_to_library": true,
+      },
       files: [
         { field: "document:101:file", path: file },
         { field: "document:102:file", path: file },
@@ -150,27 +168,39 @@ test("duplicate native document IDs stay scoped; uploads are journaled before in
   );
   for (const id of ["101", "102"]) {
     assert.equal(
-      result.effects.find((e) => e.name === "application_document_upload:" + id).status,
+      result.effects.find((e) => e.name === "application_document_upload:" + id)
+        .status,
       "verified",
     );
     assert.equal(
-      result.effects.find((e) => e.name === "application_document_attachment:" + id).status,
+      result.effects.find(
+        (e) => e.name === "application_document_attachment:" + id,
+      ).status,
       "intended",
     );
   }
   assert.equal(
-    result.effects.find((e) => e.name === "application_document_library:102").status,
+    result.effects.find((e) => e.name === "application_document_library:102")
+      .status,
     "intended",
   );
-  assert.equal(result.effects.find((e) => e.name === "application_submit").status, "intended");
+  assert.equal(
+    result.effects.find((e) => e.name === "application_submit").status,
+    "intended",
+  );
   const log = await page.evaluate(() => window.effects);
   for (const id of ["101", "102"])
     assert.ok(
       log.indexOf("journal:intended:application_document_upload:" + id) <
         log.indexOf("upload:" + id),
     );
-  assert.ok(log.indexOf("journal:intended:application_submit") < log.indexOf("apply"));
-  await rejects(fillApplicationWorkflow(page, request(), recorder(page)), "action_unavailable");
+  assert.ok(
+    log.indexOf("journal:intended:application_submit") < log.indexOf("apply"),
+  );
+  await rejects(
+    fillApplicationWorkflow(page, request(), recorder(page)),
+    "action_unavailable",
+  );
   assert.equal((await page.evaluate(() => window.requests)).length, 1);
 });
 
@@ -187,18 +217,29 @@ test("existing document selection retains exact ID and requires separate attachm
   });
   const result = await fillApplicationWorkflow(
     page,
-    request({ fields: { "document:101:type": "Existing", "document:101:existing": "44" } }),
+    request({
+      fields: {
+        "document:101:type": "Existing",
+        "document:101:existing": "44",
+      },
+    }),
     recorder(page),
   );
   assert.deepEqual(result.uploads, []);
   assert.equal(
-    result.effects.find((e) => e.name === "application_document_attachment:101").details
-      .existing_document_id,
+    result.effects.find((e) => e.name === "application_document_attachment:101")
+      .details.existing_document_id,
     "44",
   );
   const payload = (await page.evaluate(() => window.requests))[0];
-  assert.equal(payload.ApplicationDocumentInfoList[0].ExistingApplicationDocumentId, 44);
-  assert.equal(payload.ApplicationDocumentInfoList[0].UploadedFileId, undefined);
+  assert.equal(
+    payload.ApplicationDocumentInfoList[0].ExistingApplicationDocumentId,
+    44,
+  );
+  assert.equal(
+    payload.ApplicationDocumentInfoList[0].UploadedFileId,
+    undefined,
+  );
 });
 
 test("external application returns its real handoff without changing the completion checkbox or marking applied", async (t) => {
@@ -212,7 +253,8 @@ test("external application returns its real handoff without changing the complet
   await assert.rejects(
     inspectApplicationWorkflow(page),
     (e) =>
-      e.code === "external_application" && e.details.url === "https://employer.example/apply/123",
+      e.code === "external_application" &&
+      e.details.url === "https://employer.example/apply/123",
   );
   assert.deepEqual(await page.evaluate(() => window.effects), []);
 });
@@ -233,11 +275,13 @@ test("another applicant, already submitted application, questions, bidding, rank
       const c = window.controller;
       if (scenario === "applicant") c.application.ApplicantId = 8;
       if (scenario === "submitted") c.application.Id = 55;
-      if (scenario === "questions") window.questions.attributeGroups.push({ Id: 1 });
+      if (scenario === "questions")
+        window.questions.attributeGroups.push({ Id: 1 });
       if (scenario === "bidding") c.jobPosting.Rules.CanBid = true;
       if (scenario === "ranking") c.hasMultipleLocations = true;
       if (scenario === "approved") c.allowApprovedResumesOnly = true;
-      if (scenario === "url") c.applicationFiles[0].jobCoreApplicationDocumentTypeId = 7;
+      if (scenario === "url")
+        c.applicationFiles[0].jobCoreApplicationDocumentTypeId = 7;
       if (scenario === "consent") c.applicationFiles[0].sendToTopResume = "yes";
     }, scenario);
     await rejects(inspectApplicationWorkflow(page), "action_unavailable");
@@ -268,10 +312,16 @@ test("failed later upload retains first acknowledgment and never applies or repe
     "upload_uncertain",
   );
   assert.ok(
-    journal.some((e) => e.name === "application_document_upload:101" && e.status === "verified"),
+    journal.some(
+      (e) =>
+        e.name === "application_document_upload:101" && e.status === "verified",
+    ),
   );
   assert.equal(
-    journal.some((e) => e.name === "application_document_upload:102" && e.status === "verified"),
+    journal.some(
+      (e) =>
+        e.name === "application_document_upload:102" && e.status === "verified",
+    ),
     false,
   );
   assert.deepEqual(await page.evaluate(() => window.requests), []);
@@ -293,17 +343,27 @@ test("journal failure prevents an upload from starting", async (t) => {
 });
 
 test("eligibility or exact uploaded-file identity changing after final intent prevents Apply", async (t) => {
-  for (const scenario of ["rules", "file", "applicant", "session", "questions"]) {
+  for (const scenario of [
+    "rules",
+    "file",
+    "applicant",
+    "session",
+    "questions",
+  ]) {
     const page = await fixture(t);
     const record = recorder(page, [], async (effect) => {
       if (effect.name === "application_submit")
         await page.evaluate((scenario) => {
-          if (scenario === "rules") window.controller.jobPosting.Rules.CanApply = false;
+          if (scenario === "rules")
+            window.controller.jobPosting.Rules.CanApply = false;
           if (scenario === "file")
-            window.controller.applicationFiles[0].fileService.files[0].FileId = "different";
+            window.controller.applicationFiles[0].fileService.files[0].FileId =
+              "different";
           if (scenario === "applicant") window.controller.currentUser.Id = 8;
-          if (scenario === "session") window.TT.CurrentSession.CurrentUser.Id = 8;
-          if (scenario === "questions") window.questions.attributeGroups.push({ Id: 1 });
+          if (scenario === "session")
+            window.TT.CurrentSession.CurrentUser.Id = 8;
+          if (scenario === "questions")
+            window.questions.attributeGroups.push({ Id: 1 });
         }, scenario);
     });
     await rejects(
@@ -324,11 +384,16 @@ test("missing and duplicate controls, unrecognized fields and duplicate document
     await page.evaluate((scenario) => {
       const row = document.querySelector("[ng-repeat]");
       if (scenario === "missing") row.querySelector("#documentName").remove();
-      if (scenario === "duplicate") row.append(row.querySelector("#documentName").cloneNode());
+      if (scenario === "duplicate")
+        row.append(row.querySelector("#documentName").cloneNode());
       if (scenario === "extra")
-        document.querySelector("tt-jp-apply").append(document.createElement("input"));
+        document
+          .querySelector("tt-jp-apply")
+          .append(document.createElement("input"));
       if (scenario === "id")
-        window.controller.applicationFiles.push(window.controller.applicationFiles[0]);
+        window.controller.applicationFiles.push(
+          window.controller.applicationFiles[0],
+        );
     }, scenario);
     await rejects(inspectApplicationWorkflow(page), "action_unavailable");
     assert.deepEqual(await page.evaluate(() => window.effects), []);
@@ -351,14 +416,18 @@ test("a document row reorder during journaling cannot redirect an approved file 
     ) {
       reordered = true;
       await page.evaluate(() => {
-        const row = document.querySelector('[data-laplace-application-document="101"]');
+        const row = document.querySelector(
+          '[data-laplace-application-document="101"]',
+        );
         const other = [...document.querySelectorAll("[ng-repeat]")].find(
           (el) => el.requirement.jobApplicationDocumentTypeId === 102,
         );
-        other.querySelector("input[type=file]").addEventListener("change", () => {
-          const first = window.controller.applicationFiles[0];
-          if (!first.fileService.hasFiles()) first.fileService.error = true;
-        });
+        other
+          .querySelector("input[type=file]")
+          .addEventListener("change", () => {
+            const first = window.controller.applicationFiles[0];
+            if (!first.fileService.hasFiles()) first.fileService.error = true;
+          });
         row.parentElement.append(row);
       });
     }
@@ -379,7 +448,10 @@ test("a document row reorder during journaling cannot redirect an approved file 
   ]);
   const payload = (await page.evaluate(() => window.requests))[0];
   assert.deepEqual(
-    payload.ApplicationDocumentInfoList.map((x) => [x.DocumentTypeId, x.UploadedFileId]),
+    payload.ApplicationDocumentInfoList.map((x) => [
+      x.DocumentTypeId,
+      x.UploadedFileId,
+    ]),
     [
       [101, "file-101"],
       [102, "file-102"],
@@ -397,8 +469,9 @@ test("a scoped requirement replaced during journaling is rejected before uploadi
   const record = recorder(page, [], async (effect) => {
     if (effect.name === "application_document_upload:101")
       await page.evaluate(() => {
-        document.querySelector('[data-laplace-application-document="101"]').requirement =
-          window.controller.applicationFiles[1];
+        document.querySelector(
+          '[data-laplace-application-document="101"]',
+        ).requirement = window.controller.applicationFiles[1];
       });
   });
   await rejects(
@@ -410,7 +483,9 @@ test("a scoped requirement replaced during journaling is rejected before uploadi
     "record_changed",
   );
   assert.equal(
-    (await page.evaluate(() => window.effects)).some((x) => x.startsWith("upload:")),
+    (await page.evaluate(() => window.effects)).some((x) =>
+      x.startsWith("upload:"),
+    ),
     false,
   );
   assert.deepEqual(await page.evaluate(() => window.requests), []);

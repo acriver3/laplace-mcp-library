@@ -40,9 +40,15 @@ export interface ApplicationSubmission {
 }
 const prefix = (id: string) => "document:" + id + ":";
 const modeOf = (value: unknown) =>
-  value === "Upload New" ? "upload" : value === "Existing" ? "existing" : String(value);
-const unavailable = (reason: string) => new CmsError("action_unavailable", reason);
-const wrapperSelector = 'tt-jp-apply [ng-repeat="requirement in $ctrl.applicationFiles"]';
+  value === "Upload New"
+    ? "upload"
+    : value === "Existing"
+      ? "existing"
+      : String(value);
+const unavailable = (reason: string) =>
+  new CmsError("action_unavailable", reason);
+const wrapperSelector =
+  'tt-jp-apply [ng-repeat="requirement in $ctrl.applicationFiles"]';
 const finalSelector =
   'tt-jp-apply [tt-click="$ctrl.needConfirmationPage ? $ctrl.continue() : $ctrl.apply()"]';
 const controls = {
@@ -56,10 +62,16 @@ const controls = {
 async function snapshot(page: Page, allowUploads = false) {
   const result = await page.evaluate((allowUploads) => {
     const hosts = document.querySelectorAll("tt-jp-apply");
-    if (hosts.length !== 1) return { error: "CMS did not expose one native application form." };
+    if (hosts.length !== 1)
+      return { error: "CMS did not expose one native application form." };
     const ng = (window as any).angular;
     const c = ng?.element(hosts[0]).controller("ttJpApply");
-    if (!c?.jobPosting || !Array.isArray(c.applicationFiles) || !c.currentUser || !c.application)
+    if (
+      !c?.jobPosting ||
+      !Array.isArray(c.applicationFiles) ||
+      !c.currentUser ||
+      !c.application
+    )
       return { error: "The native application controller is not ready." };
     const j = c.jobPosting,
       str = (v: unknown) => (v === null || v === undefined ? "" : String(v));
@@ -98,8 +110,14 @@ async function snapshot(page: Page, allowUploads = false) {
       Number(c.application.Id) !== 0 ||
       (j.CurrentUserApplication && Number(j.CurrentUserApplication.Id) !== 0)
     )
-      return { error: "Only a new application for the signed-in student is supported." };
-    if (j.Rules?.CanApply !== true || j.Rules.HasApplied || j.Rules.IsEligibleToApply === false)
+      return {
+        error: "Only a new application for the signed-in student is supported.",
+      };
+    if (
+      j.Rules?.CanApply !== true ||
+      j.Rules.HasApplied ||
+      j.Rules.IsEligibleToApply === false
+    )
       return { error: "CMS no longer permits this exact application." };
     if (
       c.isDocsStep !== true ||
@@ -120,18 +138,31 @@ async function snapshot(page: Page, allowUploads = false) {
       Object.keys(c.entity.CustomAttributeValues).length ||
       Object.keys(c.application.CustomAttributeValues || {}).length
     )
-      return { error: "Applications with custom questions require interactive completion." };
-    const groups = [...hosts[0].querySelectorAll("tt-attribute-input-collection")];
-    if (groups.length !== 1) return { error: "The application question layout has changed." };
-    const questions = ng.element(groups[0]).controller("ttAttributeInputCollection");
+      return {
+        error:
+          "Applications with custom questions require interactive completion.",
+      };
+    const groups = [
+      ...hosts[0].querySelectorAll("tt-attribute-input-collection"),
+    ];
+    if (groups.length !== 1)
+      return { error: "The application question layout has changed." };
+    const questions = ng
+      .element(groups[0])
+      .controller("ttAttributeInputCollection");
     if (
       !Array.isArray(questions?.attributeGroups) ||
       questions.attributeGroups.length ||
       !Array.isArray(questions.revealedFieldNames) ||
       questions.revealedFieldNames.length ||
-      groups[0].querySelector("input,select,textarea,[contenteditable=true],iframe")
+      groups[0].querySelector(
+        "input,select,textarea,[contenteditable=true],iframe",
+      )
     )
-      return { error: "Applications with custom questions require interactive completion." };
+      return {
+        error:
+          "Applications with custom questions require interactive completion.",
+      };
     const documents: ApplicationDocument[] = [],
       ready: { id: string; file_ids: string[] }[] = [];
     for (const d of c.applicationFiles) {
@@ -164,13 +195,19 @@ async function snapshot(page: Page, allowUploads = false) {
           error:
             "An application upload is already present or unfinished. Reconcile it before another application.",
         };
-      const existing = d.existing.map((x: any) => ({ id: str(x.Id), name: str(x.Name) }));
+      const existing = d.existing.map((x: any) => ({
+        id: str(x.Id),
+        name: str(x.Name),
+      }));
       if (
         existing.some((x: any) => !x.id || !x.name) ||
         new Set(existing.map((x: any) => x.id)).size !== existing.length ||
         new Set(existing.map((x: any) => x.name)).size !== existing.length
       )
-        return { error: "Existing application documents have ambiguous identifiers or names." };
+        return {
+          error:
+            "Existing application documents have ambiguous identifiers or names.",
+        };
       documents.push({
         id: str(d.jobApplicationDocumentTypeId),
         core_type: d.jobCoreApplicationDocumentTypeId,
@@ -185,7 +222,9 @@ async function snapshot(page: Page, allowUploads = false) {
           ? fs.AllowedExtensions.map(String)
           : [],
         max_bytes:
-          typeof fs.attachmentSizeLimitInBytes === "number" ? fs.attachmentSizeLimitInBytes : null,
+          typeof fs.attachmentSizeLimitInBytes === "number"
+            ? fs.attachmentSizeLimitInBytes
+            : null,
       });
       ready.push({
         id: str(d.jobApplicationDocumentTypeId),
@@ -209,11 +248,14 @@ async function snapshot(page: Page, allowUploads = false) {
     };
   }, allowUploads);
   if (result.error) {
-    if (result.external) throw new CmsError("external_application", result.error, result.handoff);
+    if (result.external)
+      throw new CmsError("external_application", result.error, result.handoff);
     throw unavailable(result.error);
   }
   const url = new URL(page.url()),
-    route = url.hash.match(/^#\/jobPostings\/(\d+)\/application(?:\?([^#]*))?$/);
+    route = url.hash.match(
+      /^#\/jobPostings\/(\d+)\/application(?:\?([^#]*))?$/,
+    );
   const params = new URLSearchParams(route?.[2]);
   if (
     url.origin !== CMS_ORIGIN ||
@@ -226,7 +268,9 @@ async function snapshot(page: Page, allowUploads = false) {
     throw unavailable(
       "The native application route does not match its exact posting or reviewed analytics options.",
     );
-  return result as Required<Omit<typeof result, "error" | "external" | "handoff">>;
+  return result as Required<
+    Omit<typeof result, "error" | "external" | "handoff">
+  >;
 }
 async function only(scope: Locator, selector: string) {
   const node = scope.locator(selector);
@@ -252,19 +296,31 @@ async function documentScope(page: Page, id: string) {
     )
       matches.push(i);
   if (matches.length !== 1)
-    throw unavailable("CMS did not expose the exact application document requirement.");
+    throw unavailable(
+      "CMS did not expose the exact application document requirement.",
+    );
   const matched = nodes.nth(matches[0]);
-  await matched.evaluate((el, id) => el.setAttribute("data-laplace-application-document", id), id);
-  return page.locator('tt-jp-apply [data-laplace-application-document="' + id + '"]');
+  await matched.evaluate(
+    (el, id) => el.setAttribute("data-laplace-application-document", id),
+    id,
+  );
+  return page.locator(
+    'tt-jp-apply [data-laplace-application-document="' + id + '"]',
+  );
 }
 async function assertRequirement(scope: Locator, id: string) {
   if (
     (await scope.count()) !== 1 ||
     !(await scope.evaluate((el, id) => {
       const ng = (window as any).angular,
-        c = ng?.element(document.querySelector("tt-jp-apply")).controller("ttJpApply");
+        c = ng
+          ?.element(document.querySelector("tt-jp-apply"))
+          .controller("ttJpApply");
       const d = ng?.element(el).scope()?.requirement;
-      return String(d?.jobApplicationDocumentTypeId) === id && c?.applicationFiles?.includes(d);
+      return (
+        String(d?.jobApplicationDocumentTypeId) === id &&
+        c?.applicationFiles?.includes(d)
+      );
     }, id))
   )
     throw new CmsError(
@@ -274,7 +330,9 @@ async function assertRequirement(scope: Locator, id: string) {
 }
 async function inspectControls(page: Page, documents: ApplicationDocument[]) {
   if ((await page.locator(wrapperSelector).count()) !== documents.length)
-    throw unavailable("Application document controls no longer match the requirements.");
+    throw unavailable(
+      "Application document controls no longer match the requirements.",
+    );
   for (const d of documents) {
     const scope = await documentScope(page, d.id);
     if (
@@ -285,8 +343,12 @@ async function inspectControls(page: Page, documents: ApplicationDocument[]) {
         const model = (window as any).angular.element(el).scope().requirement;
         return (
           c.applicationFiles.includes(model) &&
-          (el.querySelector("h4")?.textContent || "").replace(/\s+/g, " ").trim() ===
-            (d.title + (d.required ? " (required)" : " (optional)")).replace(/\s+/g, " ").trim()
+          (el.querySelector("h4")?.textContent || "")
+            .replace(/\s+/g, " ")
+            .trim() ===
+            (d.title + (d.required ? " (required)" : " (optional)"))
+              .replace(/\s+/g, " ")
+              .trim()
         );
       }, d))
     )
@@ -300,23 +362,36 @@ async function inspectControls(page: Page, documents: ApplicationDocument[]) {
       } else await only(scope, selector);
     }
     const radios = await scope
-      .locator('input[type=radio][name="uploadType"][data-ng-model="model.type"]')
-      .evaluateAll((nodes) => nodes.map((n) => (n as HTMLInputElement).value).sort());
+      .locator(
+        'input[type=radio][name="uploadType"][data-ng-model="model.type"]',
+      )
+      .evaluateAll((nodes) =>
+        nodes.map((n) => (n as HTMLInputElement).value).sort(),
+      );
     if (
       JSON.stringify(radios) !== '["current","existing","upload"]' ||
-      (await scope.locator("input,select,textarea,[contenteditable=true]").count()) !==
-        (d.existing.length ? 7 : 6)
+      (await scope
+        .locator("input,select,textarea,[contenteditable=true]")
+        .count()) !== (d.existing.length ? 7 : 6)
     )
-      throw unavailable("The application document contains unreviewed controls.");
+      throw unavailable(
+        "The application document contains unreviewed controls.",
+      );
   }
   const unexpected = await page
     .locator("tt-jp-apply")
     .evaluate((el) =>
-      [...el.querySelectorAll("input,select,textarea,[contenteditable=true],iframe")].some(
-        (e) => !e.closest('[ng-repeat="requirement in $ctrl.applicationFiles"]'),
+      [
+        ...el.querySelectorAll(
+          "input,select,textarea,[contenteditable=true],iframe",
+        ),
+      ].some(
+        (e) =>
+          !e.closest('[ng-repeat="requirement in $ctrl.applicationFiles"]'),
       ),
     );
-  if (unexpected) throw unavailable("The application contains additional unreviewed fields.");
+  if (unexpected)
+    throw unavailable("The application contains additional unreviewed fields.");
   const final = page.locator(finalSelector);
   if (
     (await final.count()) !== 1 ||
@@ -325,7 +400,9 @@ async function inspectControls(page: Page, documents: ApplicationDocument[]) {
   )
     throw unavailable("CMS did not expose the reviewed native Apply control.");
 }
-export async function inspectApplicationWorkflow(page: Page): Promise<ApplicationWorkflow> {
+export async function inspectApplicationWorkflow(
+  page: Page,
+): Promise<ApplicationWorkflow> {
   const state = await snapshot(page);
   await inspectControls(page, state.documents);
   const fields: FormField[] = [];
@@ -339,7 +416,9 @@ export async function inspectApplicationWorkflow(page: Page): Promise<Applicatio
       value: d.type,
       options: [
         { value: "upload", label: "Upload New" },
-        ...(d.existing.length ? [{ value: "existing", label: "Existing" }] : []),
+        ...(d.existing.length
+          ? [{ value: "existing", label: "Existing" }]
+          : []),
       ],
     });
     fields.push({
@@ -390,14 +469,20 @@ export async function inspectApplicationWorkflow(page: Page): Promise<Applicatio
     },
   };
 }
-export function validateApplicationWorkflow(workflow: ApplicationWorkflow, change: Change) {
+export function validateApplicationWorkflow(
+  workflow: ApplicationWorkflow,
+  change: Change,
+) {
   if (
     change.operation !== "application_submit" ||
     !["jobs", "applications"].includes(change.area) ||
     change.target_id !== workflow.posting_id ||
     change.slot_id
   )
-    throw new CmsError("record_changed", "The job posting no longer matches this application.");
+    throw new CmsError(
+      "record_changed",
+      "The job posting no longer matches this application.",
+    );
   validateFields(
     workflow.fields,
     change.fields,
@@ -423,31 +508,52 @@ export function validateApplicationWorkflow(workflow: ApplicationWorkflow, chang
           "Existing selection cannot also upload, rename, or save a new library copy.",
         );
       const selected = String(change.fields[p + "existing"] ?? d.existing_id);
-      if (d.existing.filter((x) => x.id === selected || x.name === selected).length !== 1)
-        throw new CmsError("required_field", "Choose an exact existing document.", {
-          field: p + "existing",
-        });
+      if (
+        d.existing.filter((x) => x.id === selected || x.name === selected)
+          .length !== 1
+      )
+        throw new CmsError(
+          "required_field",
+          "Choose an exact existing document.",
+          {
+            field: p + "existing",
+          },
+        );
     } else if (mode === "upload") {
       if (Object.hasOwn(change.fields, p + "existing"))
-        throw new CmsError("invalid_field", "An upload cannot also select an existing document.");
+        throw new CmsError(
+          "invalid_field",
+          "An upload cannot also select an existing document.",
+        );
       if (
         (d.required ||
           Object.hasOwn(change.fields, p + "name") ||
-          (change.fields[p + "save_to_library"] ?? d.save_to_library) === true) &&
+          (change.fields[p + "save_to_library"] ?? d.save_to_library) ===
+            true) &&
         !file
       )
-        throw new CmsError("required_file", "Choose the file required for this application.", {
-          field: p + "file",
-        });
+        throw new CmsError(
+          "required_file",
+          "Choose the file required for this application.",
+          {
+            field: p + "file",
+          },
+        );
       if (file && !String(change.fields[p + "name"] ?? d.name).trim())
-        throw new CmsError("required_field", "Give the uploaded document a name.", {
-          field: p + "name",
-        });
+        throw new CmsError(
+          "required_field",
+          "Give the uploaded document a name.",
+          {
+            field: p + "name",
+          },
+        );
       if (
         file &&
         d.allowed_extensions.length &&
         !d.allowed_extensions.some(
-          (ext) => "." + ext.replace(/^\./, "").toLowerCase() === extname(file.path).toLowerCase(),
+          (ext) =>
+            "." + ext.replace(/^\./, "").toLowerCase() ===
+            extname(file.path).toLowerCase(),
         )
       )
         throw new CmsError(
@@ -455,7 +561,11 @@ export function validateApplicationWorkflow(workflow: ApplicationWorkflow, chang
           "The application uploader does not permit this file extension.",
           { field: p + "file", allowed_extensions: d.allowed_extensions },
         );
-    } else throw new CmsError("invalid_choice", "Choose an observed application document source.");
+    } else
+      throw new CmsError(
+        "invalid_choice",
+        "Choose an observed application document source.",
+      );
   }
 }
 export async function fillApplicationWorkflow(
@@ -466,13 +576,19 @@ export async function fillApplicationWorkflow(
   const workflow = await inspectApplicationWorkflow(page);
   validateApplicationWorkflow(workflow, change);
   for (const file of change.files) {
-    const d = workflow.documents.find((d) => file.field === prefix(d.id) + "file")!,
+    const d = workflow.documents.find(
+        (d) => file.field === prefix(d.id) + "file",
+      )!,
       info = await stat(file.path);
     if (!info.isFile() || (d.max_bytes !== null && info.size > d.max_bytes))
-      throw new CmsError("invalid_file", "The file exceeds this application uploader's limits.", {
-        field: file.field,
-        max_bytes: d.max_bytes,
-      });
+      throw new CmsError(
+        "invalid_file",
+        "The file exceeds this application uploader's limits.",
+        {
+          field: file.field,
+          max_bytes: d.max_bytes,
+        },
+      );
   }
   const effects: Effect[] = [],
     uploads: ApplicationSubmission["uploads"] = [];
@@ -501,11 +617,16 @@ export async function fillApplicationWorkflow(
       const effect = await intend("application_document_fields:" + d.id);
       await assertRequirement(scope, d.id);
       await (
-        await only(scope, 'input[type=radio][name="uploadType"][value="' + mode + '"]')
+        await only(
+          scope,
+          'input[type=radio][name="uploadType"][value="' + mode + '"]',
+        )
       ).check();
       if (mode === "existing") {
         const selected = String(change.fields[p + "existing"] ?? d.existing_id);
-        const document = d.existing.find((x) => x.id === selected || x.name === selected)!;
+        const document = d.existing.find(
+          (x) => x.id === selected || x.name === selected,
+        )!;
         const select = await only(scope, controls.existing);
         const matches = await select
           .locator("option")
@@ -524,7 +645,9 @@ export async function fillApplicationWorkflow(
         await select.selectOption(matches[0]);
       } else {
         if (Object.hasOwn(change.fields, p + "name"))
-          await (await only(scope, controls.name)).fill(String(change.fields[p + "name"]));
+          await (
+            await only(scope, controls.name)
+          ).fill(String(change.fields[p + "name"]));
         if (Object.hasOwn(change.fields, p + "save_to_library"))
           await (
             await only(scope, controls.library)
@@ -541,7 +664,9 @@ export async function fillApplicationWorkflow(
         };
       });
       const wanted = String(change.fields[p + "existing"] ?? d.existing_id),
-        existing = d.existing.find((x) => x.id === wanted || x.name === wanted)?.id;
+        existing = d.existing.find(
+          (x) => x.id === wanted || x.name === wanted,
+        )?.id;
       if (
         values.type !== mode ||
         values.external ||
@@ -549,7 +674,8 @@ export async function fillApplicationWorkflow(
           ? values.existing !== existing
           : values.name !== String(change.fields[p + "name"] ?? d.name) ||
             values.library !==
-              ((change.fields[p + "save_to_library"] ?? d.save_to_library) === true))
+              ((change.fields[p + "save_to_library"] ?? d.save_to_library) ===
+                true))
       )
         throw new CmsError(
           "record_changed",
@@ -566,8 +692,11 @@ export async function fillApplicationWorkflow(
       if (
         !input ||
         !(await input.evaluate((el, id) => {
-          const row = el.closest('[ng-repeat="requirement in $ctrl.applicationFiles"]');
-          const d = row && (window as any).angular.element(row).scope()?.requirement;
+          const row = el.closest(
+            '[ng-repeat="requirement in $ctrl.applicationFiles"]',
+          );
+          const d =
+            row && (window as any).angular.element(row).scope()?.requirement;
           return (
             String(d?.jobApplicationDocumentTypeId) === id &&
             !d.fileService.hasFiles() &&
@@ -576,7 +705,10 @@ export async function fillApplicationWorkflow(
           );
         }, d.id))
       )
-        throw new CmsError("record_changed", "The exact application upload control changed.");
+        throw new CmsError(
+          "record_changed",
+          "The exact application upload control changed.",
+        );
       await input.setInputFiles(file.path);
       try {
         await page.waitForFunction(
@@ -590,7 +722,10 @@ export async function fillApplicationWorkflow(
             return (
               !fs ||
               fs.hasError() ||
-              (!fs.isUploading && fs.hasFiles() && fs.files.length === 1 && !!fs.files[0]?.FileId)
+              (!fs.isUploading &&
+                fs.hasFiles() &&
+                fs.files.length === 1 &&
+                !!fs.files[0]?.FileId)
             );
           },
           d.id,
@@ -603,7 +738,8 @@ export async function fillApplicationWorkflow(
         );
       }
       const fileId = await scope.evaluate((el) => {
-        const fs = (window as any).angular.element(el).scope().requirement.fileService;
+        const fs = (window as any).angular.element(el).scope()
+          .requirement.fileService;
         return !fs.isUploading &&
           !fs.hasError() &&
           fs.hasFiles() &&
@@ -632,9 +768,14 @@ export async function fillApplicationWorkflow(
         ...d,
         type: modeOf(change.fields[p + "type"] ?? d.type),
         name: String(change.fields[p + "name"] ?? d.name),
-        save_to_library: (change.fields[p + "save_to_library"] ?? d.save_to_library) === true,
-        existing_id: d.existing.find((x) => x.id === wanted || x.name === wanted)?.id || "",
-        file_id: uploads.find((x) => x.document_type_id === d.id)?.uploaded_file_id || "",
+        save_to_library:
+          (change.fields[p + "save_to_library"] ?? d.save_to_library) === true,
+        existing_id:
+          d.existing.find((x) => x.id === wanted || x.name === wanted)?.id ||
+          "",
+        file_id:
+          uploads.find((x) => x.document_type_id === d.id)?.uploaded_file_id ||
+          "",
       };
     }),
   };
@@ -644,11 +785,16 @@ export async function fillApplicationWorkflow(
     current.applicant_id !== expected.applicant_id ||
     JSON.stringify(current.rules) !== JSON.stringify(expected.rules)
   )
-    throw new CmsError("record_changed", "The application eligibility changed before submission.");
+    throw new CmsError(
+      "record_changed",
+      "The application eligibility changed before submission.",
+    );
   await inspectControls(page, current.documents);
   for (const d of expected.documents) {
     if (d.type === "upload" && d.save_to_library)
-      await intend("application_document_library:" + d.id, { document_type_id: d.id });
+      await intend("application_document_library:" + d.id, {
+        document_type_id: d.id,
+      });
     if (d.file_id || d.type === "existing")
       await intend("application_document_attachment:" + d.id, {
         document_type_id: d.id,
@@ -666,12 +812,17 @@ export async function fillApplicationWorkflow(
       const host = document.querySelector("tt-jp-apply"),
         c = (window as any).angular?.element(host).controller("ttJpApply"),
         j = c?.jobPosting;
-      const str = (x: unknown) => (x === null || x === undefined ? "" : String(x));
+      const str = (x: unknown) =>
+        x === null || x === undefined ? "" : String(x);
       const session = (window as any).TT?.CurrentSession?.CurrentUser;
-      const collections = host?.querySelectorAll("tt-attribute-input-collection");
+      const collections = host?.querySelectorAll(
+        "tt-attribute-input-collection",
+      );
       const questions =
         collections?.length === 1
-          ? (window as any).angular.element(collections[0]).controller("ttAttributeInputCollection")
+          ? (window as any).angular
+              .element(collections[0])
+              .controller("ttAttributeInputCollection")
           : undefined;
       if (
         !c ||
@@ -745,9 +896,12 @@ export async function fillApplicationWorkflow(
             return false;
         } else if (
           str(d.Name) !== wanted.name ||
-          (d.saveToApplicationMaterialsLibrary === true) !== wanted.save_to_library ||
+          (d.saveToApplicationMaterialsLibrary === true) !==
+            wanted.save_to_library ||
           (wanted.file_id
-            ? !fs.hasFiles() || fs.files.length !== 1 || str(fs.files[0].FileId) !== wanted.file_id
+            ? !fs.hasFiles() ||
+              fs.files.length !== 1 ||
+              str(fs.files[0].FileId) !== wanted.file_id
             : fs.hasFiles() || wanted.required)
         )
           return false;

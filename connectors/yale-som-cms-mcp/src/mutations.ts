@@ -10,6 +10,23 @@ import {
 } from "./event-workflow.js";
 import { CmsReads } from "./reads.js";
 import {
+  openAppointmentWorkflow,
+  inspectAppointmentWorkflow,
+  validateAppointmentWorkflow,
+  selectAppointmentSlot,
+  appointmentSubmitControl,
+  clickAppointmentSubmit,
+  verifyAppointmentOutcome,
+  type AppointmentWorkflow,
+  type AppointmentOperation,
+} from "./appointment-workflow.js";
+import {
+  inspectApplicationWorkflow,
+  validateApplicationWorkflow,
+  fillApplicationWorkflow,
+  type ApplicationWorkflow,
+} from "./application-workflow.js";
+import {
   clickNamed,
   fieldLocator,
   fillFields,
@@ -136,6 +153,8 @@ type OpenForm = {
   favorite?: Locator;
   deleteControl?: Locator;
   eventWorkflow?: EventWorkflow;
+  applicationWorkflow?: ApplicationWorkflow;
+  appointmentWorkflow?: AppointmentWorkflow;
 };
 export class CmsMutations {
   private pending?: { signature: string; identity: string; opened: OpenForm };
@@ -276,7 +295,13 @@ export class CmsMutations {
   }
   private async uploadState(input: Locator) {
     return input.evaluate((el) => {
-      const service = (window as any).angular?.element(el).scope()?.service;
+      const ng = (window as any).angular;
+      const host = el.closest("tt-appointment-form");
+      const service =
+        ng?.element(el).scope()?.service ||
+        (host
+          ? ng?.element(host).controller("ttAppointmentForm")?.fileUploader
+          : null);
       if (
         !service ||
         typeof service.hasFiles !== "function" ||
@@ -348,6 +373,8 @@ export class CmsMutations {
     let favorite: Locator | undefined;
     let deleteControl: Locator | undefined;
     let eventWorkflow: EventWorkflow | undefined;
+    let applicationWorkflow: ApplicationWorkflow | undefined;
+    let appointmentWorkflow: AppointmentWorkflow | undefined;
     const operation = change.operation;
     const registration = await this.registrationState(page, change);
     if (operation === "favorite_set") {
@@ -360,6 +387,26 @@ export class CmsMutations {
           "This exact record does not expose a favorite control.",
         );
       favorite = choices;
+    } else if (
+      operation === "appointment_book" ||
+      operation === "appointment_cancel"
+    ) {
+      appointmentWorkflow = await openAppointmentWorkflow(page, change);
+      scope =
+        operation === "appointment_book"
+          ? page.locator("tt-appointment-form")
+          : page
+              .locator(".modal-dialog")
+              .filter({
+                has: page.getByRole("heading", {
+                  name: "Cancel the Appointment",
+                  exact: true,
+                }),
+              });
+      final =
+        operation === "appointment_book"
+          ? /^Book Appointment$/i
+          : /^Yes, cancel it$/i;
     } else if (deletion.test(operation)) {
       const record = change.target_id
         ? await this.recordScope(page, change.target_id, change.area)
@@ -377,7 +424,7 @@ export class CmsMutations {
         deleteControl = await this.control(record, pattern);
       } catch {
         await this.openButton(record, /^(Options|Actions|More)$/i);
-        deleteControl = await this.control(page.locator("body"), pattern);
+        deleteControl = await this.control(record, pattern);
       }
       final = pattern;
     } else
@@ -399,7 +446,7 @@ export class CmsMutations {
             );
           }
           const href = await apply.getAttribute("href");
-          const url = new URL(href!, CMS_ORIGIN);
+          const url = new URL(href!, page.url());
           if (url.origin !== CMS_ORIGIN)
             throw new CmsError(
               "external_application",
@@ -408,8 +455,15 @@ export class CmsMutations {
             );
           await page.goto(url.href, { waitUntil: "domcontentloaded" });
           await page
-            .getByRole("button", { name: "Apply", exact: true })
-            .waitFor();
+            .locator("tt-jp-apply")
+            .waitFor()
+            .catch(() => {
+              throw new CmsError(
+                "action_unavailable",
+                "CMS did not expose its reviewed native application form.",
+              );
+            });
+          applicationWorkflow = await inspectApplicationWorkflow(page);
           scope = await formScope(page);
           final = /^Apply$/i;
           break;
@@ -541,7 +595,6 @@ export class CmsMutations {
           final = /^(Register|Submit|Confirm Registration)$/i;
           break;
         }
-        case "appointment_book":
         case "interview_book": {
           // Read-only detail adapters bind exact schedule identities before this point.
           if (change.slot_id) {
@@ -601,7 +654,7 @@ export class CmsMutations {
           } catch {
             await this.openButton(record, /^(Options|Actions|More)$/i);
             await this.openButton(
-              page.locator("body"),
+              record,
               /^Edit( Task| Document| Contact| Experience| Education| Status| Search)?$/i,
             );
           }
@@ -614,21 +667,23 @@ export class CmsMutations {
         "This workflow requires an external site.",
         { url: page.url() },
       );
-    const fields = eventWorkflow
-      ? eventWorkflow.fields
-      : favorite
-        ? [
-            {
-              id: "_favorite",
-              label: "Favorite",
-              type: "checkbox",
-              required: false,
-              value: await favorite.isChecked(),
-            },
-          ]
-        : deleteControl
-          ? []
-          : await inspectFields(scope);
+    const fields = applicationWorkflow
+      ? applicationWorkflow.fields
+      : eventWorkflow
+        ? eventWorkflow.fields
+        : favorite
+          ? [
+              {
+                id: "_favorite",
+                label: "Favorite",
+                type: "checkbox",
+                required: false,
+                value: await favorite.isChecked(),
+              },
+            ]
+          : deleteControl
+            ? []
+            : await inspectFields(scope);
     if (operation === "target_add") {
       const targetFields = fields.filter(
         (f) =>
@@ -660,10 +715,10 @@ export class CmsMutations {
           "The selected target must match target_id exactly.",
         );
     }
-    if (!favorite && !deleteControl && !eventWorkflow)
+    if (!favorite && !deleteControl && !eventWorkflow && !applicationWorkflow)
       await this.control(scope, final);
     const uploadControls: Record<string, unknown> = {};
-    if (!eventWorkflow)
+    if (!eventWorkflow && !applicationWorkflow)
       for (const selected of change.files) {
         const field = fields.find(
           (f) => f.id === selected.field && f.type === "file",
@@ -704,6 +759,8 @@ export class CmsMutations {
     const context = {
       registration,
       event_workflow: eventWorkflow?.context,
+      application_workflow: applicationWorkflow?.context,
+      appointment_workflow: appointmentWorkflow,
       upload_controls: uploadControls,
       read_context: before.context,
       title: before.title,
@@ -760,6 +817,8 @@ export class CmsMutations {
       favorite,
       deleteControl,
       eventWorkflow,
+      applicationWorkflow,
+      appointmentWorkflow,
     };
   }
   async form(change: Change): Promise<FormResult> {
@@ -819,6 +878,10 @@ export class CmsMutations {
     this.validateIntent(change, opened.form);
     if (opened.eventWorkflow)
       validateEventWorkflow(opened.eventWorkflow, change);
+    if (opened.applicationWorkflow)
+      validateApplicationWorkflow(opened.applicationWorkflow, change);
+    if (opened.appointmentWorkflow)
+      validateAppointmentWorkflow(opened.appointmentWorkflow, change);
     validateFields(
       opened.form.fields,
       change.fields,
@@ -877,9 +940,25 @@ export class CmsMutations {
     const opened = prepared.opened;
     const effects: Effect[] = [];
     const uploadedIds: string[] = [];
-    const currentWorkflow = opened.eventWorkflow
-      ? await inspectEventWorkflow(opened.page)
-      : undefined;
+    const currentWorkflow = opened.applicationWorkflow
+      ? await inspectApplicationWorkflow(opened.page)
+      : opened.eventWorkflow
+        ? await inspectEventWorkflow(opened.page)
+        : undefined;
+    if (
+      opened.appointmentWorkflow &&
+      fingerprint(
+        await inspectAppointmentWorkflow(
+          opened.page,
+          change.operation as AppointmentOperation,
+          change.target_id!,
+        ),
+      ) !== fingerprint(opened.appointmentWorkflow)
+    )
+      throw new CmsError(
+        "preview_changed",
+        "The appointment account, eligibility, slots or required form changed after revalidation.",
+      );
     const currentFields = currentWorkflow
       ? currentWorkflow.fields
       : opened.favorite
@@ -897,8 +976,9 @@ export class CmsMutations {
           : await inspectFields(opened.scope);
     if (
       fingerprint(currentFields) !== fingerprint(opened.form.fields) ||
-      (opened.eventWorkflow
-        ? fingerprint(currentWorkflow) !== fingerprint(opened.eventWorkflow)
+      (opened.applicationWorkflow || opened.eventWorkflow
+        ? fingerprint(currentWorkflow) !==
+          fingerprint(opened.applicationWorkflow ?? opened.eventWorkflow)
         : fingerprint(
             (await this.registrationState(opened.page, change)) ?? null,
           ) !== fingerprint(opened.form.context.registration ?? null))
@@ -947,6 +1027,10 @@ export class CmsMutations {
     this.validateIntent(change, opened.form);
     if (opened.eventWorkflow)
       validateEventWorkflow(opened.eventWorkflow, change);
+    if (opened.applicationWorkflow)
+      validateApplicationWorkflow(opened.applicationWorkflow, change);
+    if (opened.appointmentWorkflow)
+      validateAppointmentWorkflow(opened.appointmentWorkflow, change);
     validateFields(
       opened.form.fields,
       change.fields,
@@ -981,6 +1065,13 @@ export class CmsMutations {
         },
         { finalControl: deleteControl },
       );
+    } else if (opened.applicationWorkflow) {
+      const result = await observeCompletion(
+        opened.page,
+        () => fillApplicationWorkflow(opened.page, change, recordEffect),
+        { form: opened.page.locator("tt-jp-apply") },
+      );
+      effects.push(...result.effects);
     } else if (opened.eventWorkflow) {
       const result = await observeCompletion(
         opened.page,
@@ -1063,6 +1154,60 @@ export class CmsMutations {
         effect.status = "verified";
         effect.details = { file_id: state.file_ids[0], field: file.field };
         await recordEffect(effect);
+      }
+      if (opened.appointmentWorkflow) {
+        if (change.operation === "appointment_book")
+          await selectAppointmentSlot(opened.page, change);
+        const postFill = await inspectAppointmentWorkflow(
+          opened.page,
+          change.operation as AppointmentOperation,
+          change.target_id!,
+        );
+        await intend(change.operation);
+        const finalControl = await appointmentSubmitControl(
+          opened.page,
+          change,
+        );
+        await observeCompletion(
+          opened.page,
+          () => clickAppointmentSubmit(opened.page, change),
+          { form: opened.scope, finalControl },
+        );
+        const receipt = await verifyAppointmentOutcome(
+          opened.page,
+          change,
+          postFill,
+        );
+        if (!receipt.verified)
+          return {
+            status: "uncertain",
+            url: receipt.url,
+            effects,
+            result: { ...receipt },
+          };
+        const linked = uploadedIds.every((id) =>
+          receipt.attachment_file_ids?.includes(id),
+        );
+        if (!linked) {
+          const finalEffect = effects.find((e) => e.name === change.operation);
+          if (finalEffect) {
+            finalEffect.status = "verified";
+            await recordEffect(finalEffect);
+          }
+          return {
+            status: "partial",
+            url: receipt.url,
+            effects,
+            result: { ...receipt },
+          };
+        }
+        await verifyEffects();
+        return {
+          status: "verified",
+          url: receipt.url,
+          effects,
+          result: { ...receipt },
+        };
       }
       await intend(change.operation);
       const finalControl = await this.control(opened.scope, opened.final);
@@ -1260,7 +1405,10 @@ export class CmsMutations {
         (e.name.startsWith("upload_") ||
           e.name.startsWith("event_document_upload:") ||
           e.name.startsWith("event_document_library:") ||
-          e.name.startsWith("event_document_attachment:")) &&
+          e.name.startsWith("event_document_attachment:") ||
+          e.name.startsWith("application_document_upload:") ||
+          e.name.startsWith("application_document_attachment:") ||
+          e.name.startsWith("application_document_library:")) &&
         e.status !== "verified",
     );
     if (

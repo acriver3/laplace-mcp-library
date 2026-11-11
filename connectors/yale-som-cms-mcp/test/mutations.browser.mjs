@@ -197,37 +197,7 @@ test("ambiguous final actions fail before editing autosaving inputs", async () =
     assert.deepEqual(state.remote, []);
   });
 });
-test("static application success wording cannot verify submission or cause a retry", async () => {
-  const fixture = () =>
-    base(
-      '<a href="/jobPostings/42/application">Apply Now</a><div>Withdraw application after applying</div>',
-    );
-  await setup(fixture, async ({ page, mutations, state }) => {
-    await page.unroute("**/*");
-    await page.route("**/*", (route) =>
-      route.fulfill({
-        contentType: "text/html",
-        body: base(
-          "<div>Withdraw application after applying</div><button onclick=\"remoteWrite('apply',true).then(()=>this.remove())\">Apply</button>",
-        ),
-      }),
-    );
-    const change = {
-      operation: "application_submit",
-      area: "jobs",
-      target_id: "42",
-      fields: {},
-      files: [],
-    };
-    await mutations.prepare(change);
-    const result = await mutations.submit(change, async (e) =>
-      state.effects.push(e),
-    );
-    assert.equal(result.status, "uncertain");
-    assert.deepEqual(state.remote, ["apply"]);
-    assert.ok(result.effects.every((e) => e.status !== "verified"));
-  });
-});
+
 test("unavailable event slots fail before registration is opened or changed", async () => {
   const fixture = () =>
     base(
@@ -280,4 +250,24 @@ test("document upload waits for positive file acknowledgement and verifies its e
     assert.deepEqual(state.remote, ["upload", "document_submit"]);
     assert.equal(state.documents[0].FileId, "501");
   });
+});
+
+test("a detached unrelated action menu cannot substitute for the approved record menu", async () => {
+  await setup(
+    () =>
+      base(
+        '<div data-id="42"><button onclick="document.querySelector(\'#other\').hidden=false">Options</button></div><section id="other" hidden><button onclick="remoteWrite(\'delete_wrong\',true)">Delete Task</button></section>',
+      ),
+    async ({ mutations, state }) => {
+      const result = await mutations.form({
+        operation: "task_delete",
+        area: "tasks",
+        target_id: "42",
+        fields: {},
+        files: [],
+      });
+      assert.equal(result.supported, false);
+      assert.deepEqual(state.remote, []);
+    },
+  );
 });

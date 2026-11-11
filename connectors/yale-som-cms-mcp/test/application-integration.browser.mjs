@@ -13,13 +13,19 @@ import { installApplicationForm } from "./fixtures/application-form.mjs";
 
 let browser;
 before(async () => {
-  browser = await chromium.launch({ channel: "chrome", headless: true, args: ["--no-sandbox"] });
+  browser = await chromium.launch({
+    channel: "chrome",
+    headless: true,
+    args: ["--no-sandbox"],
+  });
 });
 after(async () => {
   await browser?.close();
 });
 async function fixture(t, options = {}) {
-  const directory = await mkdtemp(join(tmpdir(), "cms-application-integration-"));
+  const directory = await mkdtemp(
+    join(tmpdir(), "cms-application-integration-"),
+  );
   const file = join(directory, "resume.pdf");
   await writeFile(file, "%PDF-1.7 sanitized resume");
   const context = await browser.newContext();
@@ -36,10 +42,18 @@ async function fixture(t, options = {}) {
       : route.abort(),
   );
   const page = await context.newPage();
-  const state = { applied: false, pending: false, earlyReads: 0, payloads: [], journal: [] };
+  const state = {
+    applied: false,
+    pending: false,
+    earlyReads: 0,
+    payloads: [],
+    journal: [],
+  };
   await page.exposeFunction("fixtureApply", async (payload) => {
     assert.ok(
-      state.journal.some((e) => e.name === "application_submit" && e.status === "intended"),
+      state.journal.some(
+        (e) => e.name === "application_submit" && e.status === "intended",
+      ),
     );
     state.pending = true;
     state.payloads.push(payload);
@@ -55,9 +69,13 @@ async function fixture(t, options = {}) {
     }
     const result = await navigate(url, navigationOptions);
     if (new URL(url).hash.includes("/application")) {
-      await page.setContent("<!doctype html><main><tt-jp-apply></tt-jp-apply></main>");
+      await page.setContent(
+        "<!doctype html><main><tt-jp-apply></tt-jp-apply></main>",
+      );
       await page.evaluate(installApplicationForm, {
-        docs: options.withFile ? [{ id: "101", title: "Resume", required: true }] : [],
+        docs: options.withFile
+          ? [{ id: "101", title: "Resume", required: true }]
+          : [],
       });
       if (options.external)
         await page.evaluate(() => {
@@ -70,11 +88,14 @@ async function fixture(t, options = {}) {
           document.querySelector("[tt-click]").textContent = "Mark as Applied";
         });
       await page.evaluate(() => {
-        document.querySelector("[tt-click]").addEventListener("click", async () => {
-          await window.fixtureApply(window.requests.at(-1));
-          history.replaceState(null, "", "/jobPostings#/jobPostings/123");
-          document.querySelector("main").innerHTML = "<tt-jp-detail>Applied</tt-jp-detail>";
-        });
+        document
+          .querySelector("[tt-click]")
+          .addEventListener("click", async () => {
+            await window.fixtureApply(window.requests.at(-1));
+            history.replaceState(null, "", "/jobPostings#/jobPostings/123");
+            document.querySelector("main").innerHTML =
+              "<tt-jp-detail>Applied</tt-jp-detail>";
+          });
       });
     } else {
       await page.setContent(
@@ -85,11 +106,17 @@ async function fixture(t, options = {}) {
   };
   const fakeBrowser = {
     page: async () => page,
-    identity: async () => ({ key: "student-7", name: "Fixture student", account_id: "7" }),
+    identity: async () => ({
+      key: "student-7",
+      name: "Fixture student",
+      account_id: "7",
+    }),
   };
   const reads = {
     read: async (input) => {
-      await page.goto(CMS_ORIGIN + "/jobPostings#/jobPostings/" + (input.id || "123"));
+      await page.goto(
+        CMS_ORIGIN + "/jobPostings#/jobPostings/" + (input.id || "123"),
+      );
       return {
         area: "jobs",
         url: page.url(),
@@ -133,7 +160,9 @@ async function fixture(t, options = {}) {
     download: async () => ({}),
     close: async () => {},
   };
-  const service = new CmsService(adapter, { profileDir: join(directory, "profile") });
+  const service = new CmsService(adapter, {
+    profileDir: join(directory, "profile"),
+  });
   t.after(async () => {
     await service.close();
     await context.close();
@@ -161,12 +190,17 @@ test("native application pipeline verifies a positive application ID for this ap
   assert.equal(state.payloads[0].ApplicantId, 7);
   assert.equal(state.earlyReads, 0);
   assert.equal((await service.recoveryStatus()).blocked, false);
-  await assert.rejects(service.commit(draft.draft_id, true), (e) => e.code === "draft_expired");
+  await assert.rejects(
+    service.commit(draft.draft_id, true),
+    (e) => e.code === "draft_expired",
+  );
   assert.equal(state.payloads.length, 1);
 });
 
 test("application with an acknowledged upload stays partial until attachment linkage is proven", async (t) => {
-  const { service, request, state, file } = await fixture(t, { withFile: true });
+  const { service, request, state, file } = await fixture(t, {
+    withFile: true,
+  });
   request.files.push({ field: "document:101:file", path: file });
   const draft = await service.prepare(request);
   assert.deepEqual(state.payloads, []);
@@ -177,21 +211,32 @@ test("application with an acknowledged upload stays partial until attachment lin
   });
   const result = failure.details.result;
   assert.equal(
-    result.effects.find((e) => e.name === "application_document_upload:101").status,
+    result.effects.find((e) => e.name === "application_document_upload:101")
+      .status,
     "verified",
   );
   assert.equal(
-    result.effects.find((e) => e.name === "application_document_attachment:101").status,
+    result.effects.find((e) => e.name === "application_document_attachment:101")
+      .status,
     "intended",
   );
-  assert.equal(result.effects.find((e) => e.name === "application_submit").status, "verified");
+  assert.equal(
+    result.effects.find((e) => e.name === "application_submit").status,
+    "verified",
+  );
   assert.deepEqual(
-    state.payloads[0].ApplicationDocumentInfoList.map((d) => [d.DocumentTypeId, d.UploadedFileId]),
+    state.payloads[0].ApplicationDocumentInfoList.map((d) => [
+      d.DocumentTypeId,
+      d.UploadedFileId,
+    ]),
     [[101, "file-101"]],
   );
   assert.equal(state.earlyReads, 0);
   assert.equal((await service.recoveryStatus()).blocked, true);
-  await assert.rejects(service.commit(draft.draft_id, true), (e) => e.code === "draft_expired");
+  await assert.rejects(
+    service.commit(draft.draft_id, true),
+    (e) => e.code === "draft_expired",
+  );
   assert.equal(state.payloads.length, 1);
 });
 
@@ -200,27 +245,43 @@ test("external Mark as Applied forms return the employer handoff without invokin
   const form = await mutations.form(request);
   assert.equal(form.supported, false);
   assert.equal(form.context.code, "external_application");
-  assert.equal(form.context.details.url, "https://employer.example/application/123");
-  await assert.rejects(mutations.prepare(request), (e) => e.code === "external_application");
+  assert.equal(
+    form.context.details.url,
+    "https://employer.example/application/123",
+  );
+  await assert.rejects(
+    mutations.prepare(request),
+    (e) => e.code === "external_application",
+  );
   assert.deepEqual(state.payloads, []);
   assert.deepEqual(state.journal, []);
 });
 
 test("Applied display text and a zero-ID placeholder cannot verify application success", async (t) => {
-  const { mutations, request, state, recordEffect } = await fixture(t, { placeholderAfter: true });
+  const { mutations, request, state, recordEffect } = await fixture(t, {
+    placeholderAfter: true,
+  });
   await mutations.prepare(request);
   const result = await mutations.submit(request, recordEffect);
   assert.equal(result.status, "uncertain");
-  assert.equal(result.effects.find((e) => e.name === "application_submit").status, "intended");
+  assert.equal(
+    result.effects.find((e) => e.name === "application_submit").status,
+    "intended",
+  );
   assert.equal(state.payloads.length, 1);
 });
 
 test("a positive application ID belonging to another applicant cannot verify success", async (t) => {
-  const { mutations, request, state, recordEffect } = await fixture(t, { otherApplicant: true });
+  const { mutations, request, state, recordEffect } = await fixture(t, {
+    otherApplicant: true,
+  });
   await mutations.prepare(request);
   const result = await mutations.submit(request, recordEffect);
   assert.equal(result.status, "uncertain");
-  assert.equal(result.effects.find((e) => e.name === "application_submit").status, "intended");
+  assert.equal(
+    result.effects.find((e) => e.name === "application_submit").status,
+    "intended",
+  );
   assert.equal(state.payloads.length, 1);
 });
 
@@ -228,7 +289,8 @@ test("changed application deadline after prepare prevents final Apply even with 
   const { mutations, request, page, state, recordEffect } = await fixture(t);
   await mutations.prepare(request);
   await page.evaluate(() => {
-    window.controller.jobPosting.ApplicationDeadlineDate = "2029-01-01T00:00:00";
+    window.controller.jobPosting.ApplicationDeadlineDate =
+      "2029-01-01T00:00:00";
   });
   await assert.rejects(
     mutations.submit(request, recordEffect),

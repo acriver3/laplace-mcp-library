@@ -1172,14 +1172,12 @@ export class CmsReads {
         const values = Array.isArray(value)
           ? value.map(String)
           : [String(value)];
-        const options = await select
-          .locator("option")
-          .evaluateAll((options) =>
-            options.map((o) => ({
-              value: (o as HTMLOptionElement).value,
-              label: o.textContent?.trim(),
-            })),
-          );
+        const options = await select.locator("option").evaluateAll((options) =>
+          options.map((o) => ({
+            value: (o as HTMLOptionElement).value,
+            label: o.textContent?.trim(),
+          })),
+        );
         const selected = values.map((v) => {
           const item = options.find((o) => o.value === v || o.label === v);
           if (!item)
@@ -1200,16 +1198,14 @@ export class CmsReads {
         await this.settled(page);
         continue;
       }
-      const filter = root
-        .locator("tt-selected-filter")
-        .filter({
-          has: page.locator(".filter-label", {
-            hasText: new RegExp(
-              `^\\s*${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`,
-              "i",
-            ),
-          }),
-        });
+      const filter = root.locator("tt-selected-filter").filter({
+        has: page.locator(".filter-label", {
+          hasText: new RegExp(
+            `^\\s*${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`,
+            "i",
+          ),
+        }),
+      });
       if ((await filter.count()) !== 1)
         throw new CmsError(
           "unsupported_filter",

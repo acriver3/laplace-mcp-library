@@ -1,32 +1,32 @@
 /** Sanitized DOM/controller shape observed on the native one-step application form. */
 export function installApplicationForm(options = {}) {
-  const documents = (options.docs || [{ id: "101", title: "Resume", required: true }]).map(
-    (input) => ({
-      jobApplicationDocumentTypeId: Number(input.id),
-      jobCoreApplicationDocumentTypeId: input.coreType || 1,
-      displayTitle: input.title,
-      Name: input.title,
-      isRequired: input.required,
-      isNew: true,
-      type: "upload",
-      ExistingApplicationDocumentId: null,
-      existing: input.existing || [],
-      saveToApplicationMaterialsLibrary: false,
-      fileService: {
-        files: [],
-        isUploading: false,
-        error: false,
-        AllowedExtensions: ["pdf"],
-        attachmentSizeLimitInBytes: 5000,
-        hasFiles() {
-          return this.files.length > 0;
-        },
-        hasError() {
-          return this.error;
-        },
+  const documents = (
+    options.docs || [{ id: "101", title: "Resume", required: true }]
+  ).map((input) => ({
+    jobApplicationDocumentTypeId: Number(input.id),
+    jobCoreApplicationDocumentTypeId: input.coreType || 1,
+    displayTitle: input.title,
+    Name: input.title,
+    isRequired: input.required,
+    isNew: true,
+    type: "upload",
+    ExistingApplicationDocumentId: null,
+    existing: input.existing || [],
+    saveToApplicationMaterialsLibrary: false,
+    fileService: {
+      files: [],
+      isUploading: false,
+      error: false,
+      AllowedExtensions: ["pdf"],
+      attachmentSizeLimitInBytes: 5000,
+      hasFiles() {
+        return this.files.length > 0;
       },
-    }),
-  );
+      hasError() {
+        return this.error;
+      },
+    },
+  }));
   const c = {
     postingId: "123",
     applicantId: 7,
@@ -36,7 +36,12 @@ export function installApplicationForm(options = {}) {
       Id: 123,
       ShouldApplyViaSite: true,
       CurrentUserApplication: { Id: 0 },
-      Rules: { CanApply: true, HasApplied: false, IsEligibleToApply: true, CanBid: false },
+      Rules: {
+        CanApply: true,
+        HasApplied: false,
+        IsEligibleToApply: true,
+        CanBid: false,
+      },
       ApplicationStartDate: "2026-01-01T00:00:00",
       ApplicationDeadlineDate: "2030-01-01T00:00:00",
     },
@@ -66,7 +71,14 @@ export function installApplicationForm(options = {}) {
   const escape = (value) =>
     String(value).replace(
       /[&<>"']/g,
-      (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch],
+      (ch) =>
+        ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        })[ch],
     );
   host.innerHTML =
     documents
@@ -86,7 +98,14 @@ export function installApplicationForm(options = {}) {
           (d.existing.length
             ? '<select ng-model="model.ExistingApplicationDocumentId"><option value="">Choose</option>' +
               d.existing
-                .map((x) => '<option value="number:' + x.Id + '">' + escape(x.Name) + "</option>")
+                .map(
+                  (x) =>
+                    '<option value="number:' +
+                    x.Id +
+                    '">' +
+                    escape(x.Name) +
+                    "</option>",
+                )
                 .join("") +
               "</select>"
             : "") +
@@ -99,14 +118,18 @@ export function installApplicationForm(options = {}) {
     for (let i = 0; i < documents.length; i++) {
       const row = host.querySelectorAll("[ng-repeat]")[i],
         d = documents[i];
-      row.querySelector("[data-upload]").style.display = d.type === "upload" ? "block" : "none";
-      row.querySelector("[data-existing]").style.display = d.type === "existing" ? "block" : "none";
+      row.querySelector("[data-upload]").style.display =
+        d.type === "upload" ? "block" : "none";
+      row.querySelector("[data-existing]").style.display =
+        d.type === "existing" ? "block" : "none";
     }
     if (
       documents.every(
         (d) =>
           !d.isRequired ||
-          (d.type === "existing" ? !!d.ExistingApplicationDocumentId : d.fileService.hasFiles()),
+          (d.type === "existing"
+            ? !!d.ExistingApplicationDocumentId
+            : d.fileService.hasFiles()),
       )
     )
       final.removeAttribute("disabled");
@@ -128,19 +151,27 @@ export function installApplicationForm(options = {}) {
       d.Name = name.value;
       window.effects.push("field:" + d.jobApplicationDocumentTypeId);
     });
-    row.querySelector("input[type=checkbox]").addEventListener("change", (e) => {
-      d.saveToApplicationMaterialsLibrary = e.target.checked;
-      window.effects.push("field:" + d.jobApplicationDocumentTypeId);
-    });
+    row
+      .querySelector("input[type=checkbox]")
+      .addEventListener("change", (e) => {
+        d.saveToApplicationMaterialsLibrary = e.target.checked;
+        window.effects.push("field:" + d.jobApplicationDocumentTypeId);
+      });
     row.querySelector("select")?.addEventListener("change", (e) => {
-      d.ExistingApplicationDocumentId = Number(e.target.value.replace("number:", ""));
+      d.ExistingApplicationDocumentId = Number(
+        e.target.value.replace("number:", ""),
+      );
       window.effects.push("field:" + d.jobApplicationDocumentTypeId);
       refresh();
     });
     row.querySelector("input[type=file]").addEventListener("change", () => {
       window.effects.push("upload:" + d.jobApplicationDocumentTypeId);
-      if (options.failUpload === String(d.jobApplicationDocumentTypeId)) d.fileService.error = true;
-      else d.fileService.files = [{ FileId: "file-" + d.jobApplicationDocumentTypeId }];
+      if (options.failUpload === String(d.jobApplicationDocumentTypeId))
+        d.fileService.error = true;
+      else
+        d.fileService.files = [
+          { FileId: "file-" + d.jobApplicationDocumentTypeId },
+        ];
       refresh();
     });
   }
@@ -150,15 +181,19 @@ export function installApplicationForm(options = {}) {
       JobPostingId: c.jobPosting.Id,
       ApplicantId: c.applicantId,
       ApplicationDocumentInfoList: documents
-        .filter((d) => d.fileService.hasFiles() || d.ExistingApplicationDocumentId)
+        .filter(
+          (d) => d.fileService.hasFiles() || d.ExistingApplicationDocumentId,
+        )
         .map((d) => ({
           DocumentTypeId: d.jobApplicationDocumentTypeId,
           CoreApplicationDocumentTypeId: d.jobCoreApplicationDocumentTypeId,
-          UploadedFileId: d.type === "upload" ? d.fileService.files[0]?.FileId : undefined,
+          UploadedFileId:
+            d.type === "upload" ? d.fileService.files[0]?.FileId : undefined,
           ExistingApplicationDocumentId:
             d.type === "existing" ? d.ExistingApplicationDocumentId : undefined,
           Name: d.Name,
-          SaveToApplicationMaterialsLibrary: d.saveToApplicationMaterialsLibrary,
+          SaveToApplicationMaterialsLibrary:
+            d.saveToApplicationMaterialsLibrary,
         })),
     });
     c.application.Id = 55;
@@ -166,7 +201,11 @@ export function installApplicationForm(options = {}) {
   window.angular = {
     element: (el) => ({
       controller: (name) =>
-        name === "ttJpApply" ? c : name === "ttAttributeInputCollection" ? questions : undefined,
+        name === "ttJpApply"
+          ? c
+          : name === "ttAttributeInputCollection"
+            ? questions
+            : undefined,
       scope: () => ({ requirement: el.requirement }),
     }),
   };

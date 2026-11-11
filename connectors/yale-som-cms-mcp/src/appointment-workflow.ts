@@ -147,6 +147,7 @@ export async function inspectAppointmentWorkflow(
             preferred_appointment_type_id:
               str(a.PreferredAppointmentTypeId) || null,
             location_type_id: str(a.LocationTypeId) || null,
+            ...(a.Topic !== undefined ? { topic: String(a.Topic ?? "") } : {}),
             form_valid: c.form?.$valid === true,
             attachment_file_ids:
               typeof uploader?.getFileIds === "function"
@@ -745,8 +746,16 @@ export async function verifyAppointmentOutcome(
         state.status_id === 1 &&
         state.start === expectedSlot?.start &&
         state.end === expectedSlot?.end &&
-        (!Object.hasOwn(change.fields, "Topic") ||
-          state.topic === String(change.fields.Topic)) &&
+        ((change.fields.Topic === undefined &&
+          change.fields.appointment__topic === undefined &&
+          workflow.context.topic === undefined) ||
+          String(state.topic ?? "") ===
+            String(
+              change.fields.Topic ??
+                change.fields.appointment__topic ??
+                workflow.context.topic ??
+                "",
+            )) &&
         state.preferred_appointment_type_id ===
           workflow.context.preferred_appointment_type_id &&
         state.location_type_id === workflow.context.location_type_id &&

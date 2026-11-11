@@ -13,7 +13,11 @@ import { installEventForm } from "./fixtures/event-form.mjs";
 
 let browser;
 before(async () => {
-  browser = await chromium.launch({ channel: "chrome", headless: true, args: ["--no-sandbox"] });
+  browser = await chromium.launch({
+    channel: "chrome",
+    headless: true,
+    args: ["--no-sandbox"],
+  });
 });
 after(async () => {
   await browser?.close();
@@ -49,7 +53,9 @@ async function fixture(t, options = {}) {
   await page.exposeFunction("fixtureUpload", (id) => {
     assert.ok(
       state.journal.some(
-        (effect) => effect.name === "event_document_upload:" + id && effect.status === "intended",
+        (effect) =>
+          effect.name === "event_document_upload:" + id &&
+          effect.status === "intended",
       ),
       "upload requires its durable intent",
     );
@@ -58,7 +64,8 @@ async function fixture(t, options = {}) {
   await page.exposeFunction("fixtureSave", async (payload) => {
     assert.ok(
       state.journal.some(
-        (effect) => effect.name === "event_register" && effect.status === "intended",
+        (effect) =>
+          effect.name === "event_register" && effect.status === "intended",
       ),
       "final submit requires durable intent",
     );
@@ -68,7 +75,10 @@ async function fixture(t, options = {}) {
     await new Promise((resolve) => setTimeout(resolve, 40));
     state.attending = true;
     state.pending = false;
-    return { eventId: options.wrongTargetAfter ? "999" : "123", slot: options.slot || null };
+    return {
+      eventId: options.wrongTargetAfter ? "999" : "123",
+      slot: options.slot || null,
+    };
   });
   const navigate = page.goto.bind(page);
   page.goto = async (url, navigationOptions) => {
@@ -82,7 +92,9 @@ async function fixture(t, options = {}) {
         "<!doctype html><main><tt-edit-registration></tt-edit-registration></main>",
       );
       await page.evaluate(installEventForm, {
-        docs: options.withFile ? [{ id: "101", title: "Resume", required: true }] : [],
+        docs: options.withFile
+          ? [{ id: "101", title: "Resume", required: true }]
+          : [],
         confirmOnly: !options.withFile,
         slot: options.slot,
       });
@@ -119,11 +131,13 @@ async function fixture(t, options = {}) {
                 IsOnWaitlist: false,
               },
             },
-            getCurrentUserTimeSlot: () => (attending && slot ? { Id: slot } : null),
+            getCurrentUserTimeSlot: () =>
+              attending && slot ? { Id: slot } : null,
           };
           window.angular = {
             element: () => ({
-              controller: (name) => (name === "ttEventDetail" ? controller : undefined),
+              controller: (name) =>
+                name === "ttEventDetail" ? controller : undefined,
             }),
           };
         },
@@ -138,7 +152,11 @@ async function fixture(t, options = {}) {
   };
   const browserAdapter = {
     page: async () => page,
-    identity: async () => ({ key: "student-7", name: "Fixture student", account_id: "7" }),
+    identity: async () => ({
+      key: "student-7",
+      name: "Fixture student",
+      account_id: "7",
+    }),
   };
   const reads = {
     read: async (input) => {
@@ -152,7 +170,13 @@ async function fixture(t, options = {}) {
         records: [
           { id: "123", name: "Sanitized Event" },
           ...(options.slot
-            ? [{ id: options.slot, name: "Exact slot", canRegisterForTimeslot: true }]
+            ? [
+                {
+                  id: options.slot,
+                  name: "Exact slot",
+                  canRegisterForTimeslot: true,
+                },
+              ]
             : []),
         ],
       };
@@ -180,7 +204,9 @@ async function fixture(t, options = {}) {
     download: async () => ({}),
     close: async () => {},
   };
-  const service = new CmsService(adapter, { profileDir: join(directory, "profile") });
+  const service = new CmsService(adapter, {
+    profileDir: join(directory, "profile"),
+  });
   t.after(async () => {
     await service.close();
     await context.close();
@@ -205,7 +231,9 @@ test("confirmed event registration completes through CmsService for the exact ta
   const result = await service.commit(draft.draft_id, true);
   assert.equal(result.status, "verified");
   assert.equal(result.result.target_id, "123");
-  assert.deepEqual(state.submissions, [{ eventId: "123", slot: "88", documents: [] }]);
+  assert.deepEqual(state.submissions, [
+    { eventId: "123", slot: "88", documents: [] },
+  ]);
   assert.equal(state.earlyReads, 0);
   assert.equal((await service.recoveryStatus()).blocked, false);
   await assert.rejects(
@@ -216,7 +244,9 @@ test("confirmed event registration completes through CmsService for the exact ta
 });
 
 test("file registration remains partial until the exact registration attachment is independently observed", async (t) => {
-  const { service, request, state, file } = await fixture(t, { withFile: true });
+  const { service, request, state, file } = await fixture(t, {
+    withFile: true,
+  });
   request.files.push({ field: "document:101:file", path: file });
   const draft = await service.prepare(request);
   assert.deepEqual(state.uploads, []);
@@ -229,11 +259,14 @@ test("file registration remains partial until the exact registration attachment 
   const result = failure.details.result;
   assert.equal(result.status, "partial");
   assert.equal(
-    result.effects.find((effect) => effect.name === "event_document_upload:101").status,
+    result.effects.find((effect) => effect.name === "event_document_upload:101")
+      .status,
     "verified",
   );
   assert.equal(
-    result.effects.find((effect) => effect.name === "event_document_attachment:101").status,
+    result.effects.find(
+      (effect) => effect.name === "event_document_attachment:101",
+    ).status,
     "intended",
   );
   assert.equal(
@@ -242,7 +275,11 @@ test("file registration remains partial until the exact registration attachment 
   );
   assert.deepEqual(state.uploads, ["101"]);
   assert.deepEqual(state.submissions, [
-    { eventId: "123", slot: null, documents: [{ documentTypeId: "101", fileId: "file-101" }] },
+    {
+      eventId: "123",
+      slot: null,
+      documents: [{ documentTypeId: "101", fileId: "file-101" }],
+    },
   ]);
   assert.equal(state.earlyReads, 0);
   assert.equal((await service.recoveryStatus()).blocked, true);
@@ -269,7 +306,9 @@ test("workflow rules changing after prepare reject submission even when all fiel
 });
 
 test("attendance for another event cannot verify the submitted target", async (t) => {
-  const { mutations, request, state, recordEffect } = await fixture(t, { wrongTargetAfter: true });
+  const { mutations, request, state, recordEffect } = await fixture(t, {
+    wrongTargetAfter: true,
+  });
   await mutations.prepare(request);
   const result = await mutations.submit(request, recordEffect);
   assert.equal(result.status, "uncertain");

@@ -644,17 +644,25 @@ test("event document row reordering during journaling retains exact upload requi
   });
   let reordered = false;
   const record = recorder(page, [], async (effect) => {
-    if (!reordered && effect.name === "event_document_upload:101" && effect.status === "intended") {
+    if (
+      !reordered &&
+      effect.name === "event_document_upload:101" &&
+      effect.status === "intended"
+    ) {
       reordered = true;
       await page.evaluate(() => {
-        const row = document.querySelector('[data-laplace-event-document="101"]');
+        const row = document.querySelector(
+          '[data-laplace-event-document="101"]',
+        );
         const other = [...document.querySelectorAll(".registration-file")].find(
           (el) => el.requirement.eventRegistrationDocumentTypeId === 102,
         );
-        other.querySelector("input[type=file]").addEventListener("change", () => {
-          const first = window.controller.registrationDocuments[0];
-          if (!first.fileService.hasFiles()) first.fileService.error = true;
-        });
+        other
+          .querySelector("input[type=file]")
+          .addEventListener("change", () => {
+            const first = window.controller.registrationDocuments[0];
+            if (!first.fileService.hasFiles()) first.fileService.error = true;
+          });
         row.parentElement.append(row);
       });
     }
@@ -685,8 +693,9 @@ test("changed event requirement scope cannot upload into another document", asyn
   const record = recorder(page, [], async (effect) => {
     if (effect.name === "event_document_upload:101")
       await page.evaluate(() => {
-        document.querySelector('[data-laplace-event-document="101"]').requirement =
-          window.controller.registrationDocuments[1];
+        document.querySelector(
+          '[data-laplace-event-document="101"]',
+        ).requirement = window.controller.registrationDocuments[1];
       });
   });
   await rejects(
@@ -698,7 +707,9 @@ test("changed event requirement scope cannot upload into another document", asyn
     "record_changed",
   );
   assert.equal(
-    (await page.evaluate(() => window.events)).some((x) => x.startsWith("upload:")),
+    (await page.evaluate(() => window.events)).some((x) =>
+      x.startsWith("upload:"),
+    ),
     false,
   );
 });

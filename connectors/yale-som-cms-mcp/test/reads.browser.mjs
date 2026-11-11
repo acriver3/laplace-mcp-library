@@ -1,5 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  mkdtemp,
+  mkdir,
+  symlink,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir, homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { test } from "node:test";
@@ -147,14 +154,12 @@ test("real browser search, field metadata, result pagination and query-bound cur
       { code: "unsupported_filter" },
     );
     await page.context().unroute("**/*");
-    await page
-      .context()
-      .route("**/*", (route) =>
-        route.fulfill({
-          contentType: "text/html",
-          body: fixture.replaceAll("i+101", "i+201"),
-        }),
-      );
+    await page.context().route("**/*", (route) =>
+      route.fulfill({
+        contentType: "text/html",
+        body: fixture.replaceAll("i+101", "i+201"),
+      }),
+    );
     await assert.rejects(
       () => reads.read({ area: "jobs", limit: 2, cursor: first.next_cursor }),
       { code: "cursor_changed" },
@@ -271,7 +276,7 @@ test("downloads keep redirects on origin, never overwrite files, and return inte
 });
 
 const components = `<!doctype html><body class="logged-in-user"><nav><a href="/students/profile">Profile</a></nav><main role="main"><h1>Fixture account data</h1><tt-calendar></tt-calendar><tt-appointment-list></tt-appointment-list><tt-event-detail></tt-event-detail><tt-job-posting-detail></tt-job-posting-detail><tt-inline-single-select-input></tt-inline-single-select-input><tt-time-slot-list></tt-time-slot-list><tt-saved-search><button>My Saved Searches</button><p>Search Alpha</p></tt-saved-search></main><script>
-window.TT={CurrentSession:{CurrentUser:{Id:1234567}}};
+window.TT={CurrentSession:{CurrentUser:{Id:1234567,TypeId:2}}};
 const event={EntityId:901,Id:901,AdviserName:'Coach',start:'2027-01-05T14:00:00Z',end:'2027-01-05T14:30:00Z',TypeId:2};
 const controllers={ttJobPostingDetail:{model:{jobPosting:{Id:555},rules:{HasApplied:false,CanApply:true},currentApplication:{Id:0,JobPostingId:0,OciStatusDisplay:'Applied',ApplicationDate:'2027-01-05T00:00:00'}}},ttInlineSingleSelectInput:{items:[{Id:444,Name:'Currency option is not a record'}]},ttCalendar:{view:{listViewDateRange:{Start:'2027-01-05T05:00:00Z',End:'2027-01-12T05:00:00Z'}},goToDate(start){this.lastStart=start;}},ttAppointmentList:{calendarEvents:[event],showDetails(value){if(value!==event)throw Error('Wrong event binding');document.body.insertAdjacentHTML('beforeend','<section role="dialog"><h2>Appointment 901</h2><p>Coach — verified slot</p></section>');}},ttEventDetail:{event:{Id:700,Name:'Fixture event',IsAttending:true,RegistrationRules:{IsAttending:true,IsOnWaitlist:false}},studentRegistrationLabel:'Registered'},ttTimeSlotList:{eventId:700,currentUserTimeSlot:{Id:701,StudentName:'PRIVATE',StudentId:1234567},timeSlots:[{Id:701,EventId:700,EventTimeSlotId:702,StartTime:'2027-01-05T14:00:00',EndTime:'2027-01-05T14:30:00',StudentName:'OTHER PRIVATE',StudentId:7654321,canRegisterForTimeslot:false}]},ttSavedSearch:{savedSearchGroups:[{savedSearches:[{Id:801,Name:'Search Alpha'}]}]}};
 window.angular={element(e){return {injector(){return {has(){return true},get(){return {pendingRequests:[]}}}},controller(name){return controllers[name]}}}};
@@ -496,6 +501,71 @@ test("observed signed storage redirects use a fresh credential-free fetch", asyn
     );
   } finally {
     globalThis.fetch = originalFetch;
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("background identity rejects an authenticated non-student account", async () => {
+  await withBrowser(async (browser, page) => {
+    await page.goto(CMS_ORIGIN + "/dashboard/");
+    await page.evaluate(
+      () => (window.TT.CurrentSession.CurrentUser.TypeId = 1),
+    );
+    await assert.rejects(() => browser.identity(), {
+      code: "account_not_student",
+    });
+  });
+});
+
+test("background Chrome keeps the request guard active against delayed preview autosaves", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "cms-guard-integration-"));
+  const browser = new CmsBrowser(
+    join(dir, "profile"),
+    "chrome",
+    false,
+    join(dir, "downloads"),
+  );
+  try {
+    const page = await browser.page();
+    await page.context().setOffline(true);
+    await page
+      .context()
+      .route("**/*", (route) =>
+        route.request().method() === "GET"
+          ? route.fulfill({ contentType: "text/html", body: fixture })
+          : route.fallback(),
+      );
+    await page.goto(CMS_ORIGIN + "/dashboard/");
+    await page.evaluate(() => {
+      setTimeout(() => {
+        fetch("/api/v2/unreviewed-preview-write", {
+          method: "POST",
+          body: "fixture",
+        }).catch(() => {});
+      }, 30);
+    });
+    await page.waitForTimeout(150);
+    assert.throws(() => browser.assertReadRequests(), {
+      code: "read_request_unreviewed",
+    });
+    assert.doesNotThrow(() => browser.assertReadRequests());
+  } finally {
+    await browser.close();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("profile directory aliases cannot bypass the dedicated-profile restriction", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "cms-profile-alias-"));
+  const ordinary = join(dir, "Google", "Chrome", "User Data");
+  const alias = join(dir, "alias");
+  await mkdir(ordinary, { recursive: true });
+  await symlink(ordinary, alias, "junction");
+  const browser = new CmsBrowser(alias);
+  try {
+    await assert.rejects(() => browser.page(), { code: "invalid_profile" });
+  } finally {
+    await browser.close();
     await rm(dir, { recursive: true, force: true });
   }
 });
