@@ -14,7 +14,11 @@ import {
 
 let browser, directory, file;
 before(async () => {
-  browser = await chromium.launch({ channel: "chrome", headless: true, args: ["--no-sandbox"] });
+  browser = await chromium.launch({
+    channel: "chrome",
+    headless: true,
+    args: ["--no-sandbox"],
+  });
   directory = await mkdtemp(join(tmpdir(), "cms-event-fixture-"));
   file = join(directory, "fixture.pdf");
   await writeFile(file, "%PDF-1.7 sanitized fixture");
@@ -43,7 +47,9 @@ async function fixture(t, options = {}) {
   );
   t.after(() => context.close());
   await page.evaluate((options) => {
-    const docs = (options.docs || [{ id: "101", title: "Resume", required: true }]).map((input) => {
+    const docs = (
+      options.docs || [{ id: "101", title: "Resume", required: true }]
+    ).map((input) => {
       const d = {
         eventRegistrationDocumentTypeId: Number(input.id),
         registrationDocumentTypeCoreId: 1,
@@ -115,7 +121,14 @@ async function fixture(t, options = {}) {
     const escape = (value) =>
       String(value).replace(
         /[&<>"']/g,
-        (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
+        (c) =>
+          ({
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            '"': "&quot;",
+            "'": "&#39;",
+          })[c],
       );
     window.events = [];
     window.controller = c;
@@ -140,7 +153,14 @@ async function fixture(t, options = {}) {
                 '<input type="file" uploader="service" hidden></div>' +
                 '<div data-existing><select ng-model="model.ExistingApplicationDocumentId"><option value="">Choose</option>' +
                 d.existing
-                  .map((x) => '<option value="number:' + x.Id + '">' + escape(x.Name) + "</option>")
+                  .map(
+                    (x) =>
+                      '<option value="number:' +
+                      x.Id +
+                      '">' +
+                      escape(x.Name) +
+                      "</option>",
+                  )
                   .join("") +
                 "</select></div></form></div>",
             )
@@ -170,39 +190,55 @@ async function fixture(t, options = {}) {
             d.Name = name.value;
             window.events.push("fields:" + d.eventRegistrationDocumentTypeId);
           });
-          row.querySelector('input[type="checkbox"]').checked = d.saveToApplicationMaterialsLibrary;
-          row.querySelector('input[type="checkbox"]').addEventListener("change", (e) => {
-            d.saveToApplicationMaterialsLibrary = e.target.checked;
-            window.events.push("fields:" + d.eventRegistrationDocumentTypeId);
-          });
+          row.querySelector('input[type="checkbox"]').checked =
+            d.saveToApplicationMaterialsLibrary;
+          row
+            .querySelector('input[type="checkbox"]')
+            .addEventListener("change", (e) => {
+              d.saveToApplicationMaterialsLibrary = e.target.checked;
+              window.events.push("fields:" + d.eventRegistrationDocumentTypeId);
+            });
           row.querySelector("select").value = d.ExistingApplicationDocumentId
             ? "number:" + d.ExistingApplicationDocumentId
             : "";
           row.querySelector("select").addEventListener("change", (e) => {
-            d.ExistingApplicationDocumentId = Number(e.target.value.replace("number:", ""));
+            d.ExistingApplicationDocumentId = Number(
+              e.target.value.replace("number:", ""),
+            );
             window.events.push("fields:" + d.eventRegistrationDocumentTypeId);
           });
-          row.querySelector('input[type="file"]').addEventListener("change", () => {
-            window.events.push("upload:" + d.eventRegistrationDocumentTypeId);
-            if (options.failUpload === String(d.eventRegistrationDocumentTypeId))
-              d.fileService.error = true;
-            else d.fileService.files = [{ FileId: "file-" + d.eventRegistrationDocumentTypeId }];
-          });
+          row
+            .querySelector('input[type="file"]')
+            .addEventListener("change", () => {
+              window.events.push("upload:" + d.eventRegistrationDocumentTypeId);
+              if (
+                options.failUpload === String(d.eventRegistrationDocumentTypeId)
+              )
+                d.fileService.error = true;
+              else
+                d.fileService.files = [
+                  { FileId: "file-" + d.eventRegistrationDocumentTypeId },
+                ];
+            });
           visibility();
         }
-        host.querySelector('[ng-click="$ctrl.continue()"]').addEventListener("click", (e) => {
-          e.preventDefault();
-          c.continue();
-          render();
-        });
+        host
+          .querySelector('[ng-click="$ctrl.continue()"]')
+          .addEventListener("click", (e) => {
+            e.preventDefault();
+            c.continue();
+            render();
+          });
       } else {
         host.innerHTML =
           '<section ng-if="$ctrl.currentStepId == $ctrl.confirmationStepId"><div>Are you sure you want to register for this event?</div><a role="button" tt-click="$ctrl.save()" href="#">Register</a></section>';
-        host.querySelector('[tt-click="$ctrl.save()"]').addEventListener("click", (e) => {
-          e.preventDefault();
-          window.events.push("submit");
-          c.isRegistrationBeingSubmitted = true;
-        });
+        host
+          .querySelector('[tt-click="$ctrl.save()"]')
+          .addEventListener("click", (e) => {
+            e.preventDefault();
+            window.events.push("submit");
+            c.isRegistrationBeingSubmitted = true;
+          });
       }
     };
     window.angular = {
@@ -230,13 +266,15 @@ const change = (extra = {}) => ({
   files: [],
   ...extra,
 });
-const rejects = (promise, code) => assert.rejects(promise, (e) => e.code === code);
+const rejects = (promise, code) =>
+  assert.rejects(promise, (e) => e.code === code);
 const recorder =
   (page, effects = [], action) =>
   async (effect) => {
     effects.push(structuredClone(effect));
     await page.evaluate(
-      (effect) => window.events.push("journal:" + effect.status + ":" + effect.name),
+      (effect) =>
+        window.events.push("journal:" + effect.status + ":" + effect.name),
       effect,
     );
     await action?.(effect);
@@ -255,7 +293,10 @@ test("preview inspects every stage with stable prefixed duplicate-control fields
   assert.ok(result.fields.some((f) => f.id === "document:102:name"));
   assert.deepEqual(result.context.steps, ["docs", "confirm"]);
   assert.deepEqual(await page.evaluate(() => window.events), []);
-  assert.equal(await page.evaluate(() => window.controller.currentStepId), "docs");
+  assert.equal(
+    await page.evaluate(() => window.controller.currentStepId),
+    "docs",
+  );
 });
 
 test("required uploads, mutually exclusive choices, exact slots, extensions, and unknown fields validate before edits", async (t) => {
@@ -270,14 +311,17 @@ test("required uploads, mutually exclusive choices, exact slots, extensions, and
     (e) => e.code === "record_changed",
   );
   assert.throws(
-    () => validateEventWorkflow(workflow, change({ fields: { unknown: true } })),
+    () =>
+      validateEventWorkflow(workflow, change({ fields: { unknown: true } })),
     (e) => e.code === "invalid_field",
   );
   assert.throws(
     () =>
       validateEventWorkflow(
         workflow,
-        change({ files: [{ field: "document:101:file", path: "/tmp/no.exe" }] }),
+        change({
+          files: [{ field: "document:101:file", path: "/tmp/no.exe" }],
+        }),
       ),
     (e) => e.code === "invalid_file",
   );
@@ -294,7 +338,10 @@ test("multiple uploads journal each effect before starting and submit once; libr
   const result = await fillEventWorkflow(
     page,
     change({
-      fields: { "document:102:name": "My cover", "document:102:save_to_library": true },
+      fields: {
+        "document:102:name": "My cover",
+        "document:102:save_to_library": true,
+      },
       files: [
         { field: "document:101:file", path: file },
         { field: "document:102:file", path: file },
@@ -306,7 +353,10 @@ test("multiple uploads journal each effect before starting and submit once; libr
     { document_type_id: "101", uploaded_file_id: "file-101" },
     { document_type_id: "102", uploaded_file_id: "file-102" },
   ]);
-  assert.equal(result.effects.find((e) => e.name === "event_register").status, "intended");
+  assert.equal(
+    result.effects.find((e) => e.name === "event_register").status,
+    "intended",
+  );
   assert.equal(
     result.effects.find((e) => e.name === "event_document_library:102").status,
     "intended",
@@ -318,9 +368,12 @@ test("multiple uploads journal each effect before starting and submit once; libr
   const log = await page.evaluate(() => window.events);
   for (const id of ["101", "102"])
     assert.ok(
-      log.indexOf("journal:intended:event_document_upload:" + id) < log.indexOf("upload:" + id),
+      log.indexOf("journal:intended:event_document_upload:" + id) <
+        log.indexOf("upload:" + id),
     );
-  assert.ok(log.indexOf("journal:intended:event_register") < log.indexOf("submit"));
+  assert.ok(
+    log.indexOf("journal:intended:event_register") < log.indexOf("submit"),
+  );
   assert.equal(log.filter((x) => x === "submit").length, 1);
   assert.equal(
     await page.evaluate(() => window.controller.registrationDocuments[0].Name),
@@ -330,7 +383,10 @@ test("multiple uploads journal each effect before starting and submit once; libr
     await page.evaluate(() => window.controller.registrationDocuments[1].Name),
     "My cover",
   );
-  await rejects(fillEventWorkflow(page, change(), recorder(page)), "action_unavailable");
+  await rejects(
+    fillEventWorkflow(page, change(), recorder(page)),
+    "action_unavailable",
+  );
 });
 
 test("existing library documents are selected by an exact available ID without uploads", async (t) => {
@@ -352,12 +408,16 @@ test("existing library documents are selected by an exact available ID without u
   assert.deepEqual(result.uploads, []);
   assert.equal(
     await page.evaluate(
-      () => window.controller.registrationDocuments[0].ExistingApplicationDocumentId,
+      () =>
+        window.controller.registrationDocuments[0]
+          .ExistingApplicationDocumentId,
     ),
     55,
   );
   assert.equal(
-    (await page.evaluate(() => window.events)).filter((x) => x.startsWith("upload:")).length,
+    (await page.evaluate(() => window.events)).filter((x) =>
+      x.startsWith("upload:"),
+    ).length,
     0,
   );
 });
@@ -384,14 +444,24 @@ test("failed later upload preserves acknowledged first effect and never submits 
     ),
     "upload_uncertain",
   );
-  assert.ok(journal.some((e) => e.name === "event_document_upload:101" && e.status === "verified"));
+  assert.ok(
+    journal.some(
+      (e) => e.name === "event_document_upload:101" && e.status === "verified",
+    ),
+  );
   assert.equal(
-    journal.some((e) => e.name === "event_document_upload:102" && e.status === "verified"),
+    journal.some(
+      (e) => e.name === "event_document_upload:102" && e.status === "verified",
+    ),
     false,
   );
-  assert.equal((await page.evaluate(() => window.events)).includes("submit"), false);
   assert.equal(
-    (await page.evaluate(() => window.events)).filter((x) => x === "upload:102").length,
+    (await page.evaluate(() => window.events)).includes("submit"),
+    false,
+  );
+  assert.equal(
+    (await page.evaluate(() => window.events)).filter((x) => x === "upload:102")
+      .length,
     1,
   );
 });
@@ -412,7 +482,10 @@ test("eligibility changes during final journaling prevent the final click", asyn
     ),
     "record_changed",
   );
-  assert.equal((await page.evaluate(() => window.events)).includes("submit"), false);
+  assert.equal(
+    (await page.evaluate(() => window.events)).includes("submit"),
+    false,
+  );
 });
 
 test("uploaded-file identity changes during final journaling prevent the final click", async (t) => {
@@ -420,7 +493,8 @@ test("uploaded-file identity changes during final journaling prevent the final c
   const record = recorder(page, [], async (effect) => {
     if (effect.name === "event_register")
       await page.evaluate(() => {
-        window.controller.registrationDocuments[0].fileService.files[0].FileId = "different";
+        window.controller.registrationDocuments[0].fileService.files[0].FileId =
+          "different";
       });
   });
   await rejects(
@@ -431,7 +505,10 @@ test("uploaded-file identity changes during final journaling prevent the final c
     ),
     "record_changed",
   );
-  assert.equal((await page.evaluate(() => window.events)).includes("submit"), false);
+  assert.equal(
+    (await page.evaluate(() => window.events)).includes("submit"),
+    false,
+  );
 });
 
 test("journal failure before upload prevents file input and final submission", async (t) => {
@@ -450,14 +527,24 @@ test("journal failure before upload prevents file input and final submission", a
 });
 
 test("surveys, external instructions, URL documents, external consent, core reservations, and other students fail closed", async (t) => {
-  for (const mutation of ["survey", "instructions", "url", "consent", "core", "other_student"]) {
+  for (const mutation of [
+    "survey",
+    "instructions",
+    "url",
+    "consent",
+    "core",
+    "other_student",
+  ]) {
     const page = await fixture(t);
     await page.evaluate((mutation) => {
       const c = window.controller;
       if (mutation === "survey") c.preSurveyMetadata = { fields: [] };
-      if (mutation === "instructions") c.event.RegistrationInstructions = "Complete another site.";
-      if (mutation === "url") c.registrationDocuments[0].registrationDocumentTypeCoreId = 7;
-      if (mutation === "consent") c.registrationDocuments[0].sendToTopResume = true;
+      if (mutation === "instructions")
+        c.event.RegistrationInstructions = "Complete another site.";
+      if (mutation === "url")
+        c.registrationDocuments[0].registrationDocumentTypeCoreId = 7;
+      if (mutation === "consent")
+        c.registrationDocuments[0].sendToTopResume = true;
       if (mutation === "core") c.coreEventId = 77;
       if (mutation === "other_student") c.studentId = 9;
     }, mutation);
@@ -523,7 +610,11 @@ test("confirmation-only flow submits once with a journal and exact slot binding"
   const page = await fixture(t, { docs: [], confirmOnly: true, slot: "88" });
   const workflow = await inspectEventWorkflow(page);
   assert.equal(workflow.slot_id, "88");
-  const result = await fillEventWorkflow(page, change({ slot_id: "88" }), recorder(page));
+  const result = await fillEventWorkflow(
+    page,
+    change({ slot_id: "88" }),
+    recorder(page),
+  );
   assert.deepEqual(result.uploads, []);
   assert.deepEqual(await page.evaluate(() => window.events), [
     "journal:intended:event_register",

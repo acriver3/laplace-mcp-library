@@ -12,7 +12,9 @@ export async function formScope(page: Page): Promise<Locator> {
     // Nested dialog wrappers describe one form. Two visible sibling forms are ambiguous.
     const sameForm = await leaf.evaluate((last) => {
       const all = [
-        ...document.querySelectorAll(".modal,[role=dialog],.slideout,tt-form-slideout"),
+        ...document.querySelectorAll(
+          ".modal,[role=dialog],.slideout,tt-form-slideout",
+        ),
       ].filter((e) => e.getClientRects().length);
       return all.every((e) => e === last || e.contains(last));
     });
@@ -25,7 +27,10 @@ export async function formScope(page: Page): Promise<Locator> {
   }
   const main = page.locator("[role=main],main");
   if ((await main.count()) === 1) return main;
-  throw new CmsError("page_changed", "CMS did not expose one expected content region.");
+  throw new CmsError(
+    "page_changed",
+    "CMS did not expose one expected content region.",
+  );
 }
 export async function clickNamed(scope: Locator, names: RegExp): Promise<void> {
   const controls = scope.locator("button,a,[role=button],input[type=submit]");
@@ -34,7 +39,12 @@ export async function clickNamed(scope: Locator, names: RegExp): Promise<void> {
     const el = controls.nth(i);
     if (!(await el.isVisible())) continue;
     const label = await el.evaluate((e) =>
-      (e.getAttribute("aria-label") || e.textContent || (e as HTMLInputElement).value || "")
+      (
+        e.getAttribute("aria-label") ||
+        e.textContent ||
+        (e as HTMLInputElement).value ||
+        ""
+      )
         .replace(/\s+/g, " ")
         .trim(),
     );
@@ -56,11 +66,12 @@ export async function clickNamed(scope: Locator, names: RegExp): Promise<void> {
 export async function inspectFields(scope: Locator): Promise<FormField[]> {
   const inspected = await scope.evaluate((root) => {
     const visible = (e: Element) => !!e.getClientRects().length;
-    const clean = (s: string | null | undefined) => (s || "").replace(/\s+/g, " ").trim();
+    const clean = (s: string | null | undefined) =>
+      (s || "").replace(/\s+/g, " ").trim();
     const nodes = [
-      ...root.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
-        "input,select,textarea,[contenteditable=true]",
-      ),
+      ...root.querySelectorAll<
+        HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+      >("input,select,textarea,[contenteditable=true]"),
     ];
     const result: FormField[] = [];
     const seen = new Map<
@@ -77,7 +88,9 @@ export async function inspectFields(scope: Locator): Promise<FormField[]> {
         return false;
       const wrapper = e.closest("tt-input");
       if (type === "file") return visible(e.parentElement || e);
-      return visible(e) || (e.tagName === "SELECT" && !!wrapper && visible(wrapper));
+      return (
+        visible(e) || (e.tagName === "SELECT" && !!wrapper && visible(wrapper))
+      );
     };
     for (const e of nodes) {
       if (!included(e)) continue;
@@ -92,7 +105,8 @@ export async function inspectFields(scope: Locator): Promise<FormField[]> {
           e.getAttribute("placeholder"),
       );
       let id = e.getAttribute("name") || wrapper?.getAttribute("name") || "";
-      if (!id && e.id && !/^(input-|fileUploaderInput_|cke_)/.test(e.id)) id = e.id;
+      if (!id && e.id && !/^(input-|fileUploaderInput_|cke_)/.test(e.id))
+        id = e.id;
       if (!id) id = type === "file" ? "file" : label;
       const required =
         e.hasAttribute("required") ||
@@ -123,7 +137,8 @@ export async function inspectFields(scope: Locator): Promise<FormField[]> {
         label: label || id,
         type,
         required,
-        read_only: e.hasAttribute("readonly") || (e as HTMLInputElement).disabled,
+        read_only:
+          e.hasAttribute("readonly") || (e as HTMLInputElement).disabled,
       };
       if (type === "radio") {
         const name = e.getAttribute("name");
@@ -141,7 +156,9 @@ export async function inspectFields(scope: Locator): Promise<FormField[]> {
         const values = radios.map((x) => x.value);
         if (new Set(values).size !== values.length) ambiguous.push(id);
         f.required =
-          radios.some((x) => x.required || x.getAttribute("aria-required") === "true") || required;
+          radios.some(
+            (x) => x.required || x.getAttribute("aria-required") === "true",
+          ) || required;
         f.read_only = radios.every((x) => x.disabled);
         f.options = radios.map((x) => ({
           value: x.value,
@@ -161,14 +178,25 @@ export async function inspectFields(scope: Locator): Promise<FormField[]> {
             (o.parentElement?.tagName === "OPTGROUP" &&
               (o.parentElement as HTMLOptGroupElement).disabled),
         }));
-        f.value = select.multiple ? [...select.selectedOptions].map((o) => o.value) : select.value;
+        f.value = select.multiple
+          ? [...select.selectedOptions].map((o) => o.value)
+          : select.value;
       } else if (type === "file") f.type = "file";
-      else f.value = e.getAttribute("contenteditable") === "true" ? clean(e.textContent) : e.value;
+      else
+        f.value =
+          e.getAttribute("contenteditable") === "true"
+            ? clean(e.textContent)
+            : e.value;
       result.push(f);
     }
-    for (const iframe of root.querySelectorAll<HTMLIFrameElement>('iframe[title^="Editor"]')) {
+    for (const iframe of root.querySelectorAll<HTMLIFrameElement>(
+      'iframe[title^="Editor"]',
+    )) {
       if (!visible(iframe)) continue;
-      const editorName = (iframe.getAttribute("title") || "Editor").replace(/^Editor,?\s*/, "");
+      const editorName = (iframe.getAttribute("title") || "Editor").replace(
+        /^Editor,?\s*/,
+        "",
+      );
       const id = "editor:" + editorName;
       if (seen.has(id)) {
         ambiguous.push(id);
@@ -196,16 +224,27 @@ export async function inspectFields(scope: Locator): Promise<FormField[]> {
 function attr(value: string) {
   return JSON.stringify(value);
 }
-async function unique(node: Locator, field: FormField): Promise<Locator | undefined> {
+async function unique(
+  node: Locator,
+  field: FormField,
+): Promise<Locator | undefined> {
   const count = await node.count();
   if (count > 1)
-    throw new CmsError("ambiguous_field", "The form field matches multiple controls.", {
-      field: field.id,
-      count,
-    });
+    throw new CmsError(
+      "ambiguous_field",
+      "The form field matches multiple controls.",
+      {
+        field: field.id,
+        count,
+      },
+    );
   return count === 1 ? node : undefined;
 }
-function namedControls(scope: Locator, attribute: "name" | "id", value: string): Locator {
+function namedControls(
+  scope: Locator,
+  attribute: "name" | "id",
+  value: string,
+): Locator {
   const match = "[" + attribute + "=" + attr(value) + "]";
   // Match actual controls, never a named tt-input wrapper. Bootstrap dropdowns
   // deliberately hide their native select inside a visible custom element.
@@ -225,7 +264,10 @@ function namedControls(scope: Locator, attribute: "name" | "id", value: string):
       ":visible",
   );
 }
-export async function fieldLocator(scope: Locator, field: FormField): Promise<Locator> {
+export async function fieldLocator(
+  scope: Locator,
+  field: FormField,
+): Promise<Locator> {
   if (field.type === "file") {
     const named = await unique(
       scope.locator("input[type=file][name=" + attr(field.id) + "]"),
@@ -238,7 +280,9 @@ export async function fieldLocator(scope: Locator, field: FormField): Promise<Lo
     );
     if (identified) return identified;
     const wrapped = await unique(
-      scope.locator("tt-input[name=" + attr(field.id) + "]:visible input[type=file]"),
+      scope.locator(
+        "tt-input[name=" + attr(field.id) + "]:visible input[type=file]",
+      ),
       field,
     );
     if (wrapped) return wrapped;
@@ -258,14 +302,24 @@ export async function fieldLocator(scope: Locator, field: FormField): Promise<Lo
       field,
     );
     if (wrapped) return wrapped;
-    const identified = await unique(namedControls(scope, "id", field.id), field);
+    const identified = await unique(
+      namedControls(scope, "id", field.id),
+      field,
+    );
     if (identified) return identified;
-    const labelled = await unique(scope.getByLabel(field.label, { exact: true }), field);
+    const labelled = await unique(
+      scope.getByLabel(field.label, { exact: true }),
+      field,
+    );
     if (labelled) return labelled;
   }
-  throw new CmsError("page_changed", "The form field cannot be located unambiguously.", {
-    field: field.id,
-  });
+  throw new CmsError(
+    "page_changed",
+    "The form field cannot be located unambiguously.",
+    {
+      field: field.id,
+    },
+  );
 }
 function validateValues(
   fields: FormField[],
@@ -273,33 +327,56 @@ function validateValues(
   reserved: string[],
 ) {
   if (new Set(fields.map((f) => f.id)).size !== fields.length)
-    throw new CmsError("ambiguous_field", "The form contains duplicate field identifiers.");
+    throw new CmsError(
+      "ambiguous_field",
+      "The form contains duplicate field identifiers.",
+    );
   for (const key of Object.keys(proposed)) {
     if (reserved.includes(key)) continue;
     const field = fields.find((f) => f.id === key);
     if (!field || field.read_only || field.type === "file")
-      throw new CmsError("invalid_field", "Choose editable fields returned by cms_get_form.", {
-        field: key,
-      });
+      throw new CmsError(
+        "invalid_field",
+        "Choose editable fields returned by cms_get_form.",
+        {
+          field: key,
+        },
+      );
     const value = proposed[key];
     if (field.type === "checkbox" && typeof value !== "boolean")
-      throw new CmsError("invalid_field", "Checkbox fields require true or false.", { field: key });
+      throw new CmsError(
+        "invalid_field",
+        "Checkbox fields require true or false.",
+        { field: key },
+      );
     if (field.options) {
       if (field.type !== "multiselect" && Array.isArray(value))
-        throw new CmsError("invalid_field", "This control accepts one choice.", { field: key });
+        throw new CmsError(
+          "invalid_field",
+          "This control accepts one choice.",
+          { field: key },
+        );
       for (const item of Array.isArray(value) ? value : [String(value)]) {
         const matches = field.options.filter(
           (o) => !o.disabled && (o.value === item || o.label === item),
         );
         if (matches.length !== 1)
-          throw new CmsError("invalid_choice", "Choose one unambiguous current CMS option.", {
-            field: key,
-          });
+          throw new CmsError(
+            "invalid_choice",
+            "Choose one unambiguous current CMS option.",
+            {
+              field: key,
+            },
+          );
       }
     } else if (Array.isArray(value))
-      throw new CmsError("invalid_field", "This control does not accept multiple values.", {
-        field: key,
-      });
+      throw new CmsError(
+        "invalid_field",
+        "This control does not accept multiple values.",
+        {
+          field: key,
+        },
+      );
   }
 }
 export function validateFields(
@@ -318,13 +395,17 @@ export function validateFields(
       );
   for (const field of fields) {
     if (!field.required || field.read_only) continue;
-    const value = Object.hasOwn(proposed, field.id) ? proposed[field.id] : field.value;
+    const value = Object.hasOwn(proposed, field.id)
+      ? proposed[field.id]
+      : field.value;
     const missing =
       field.type === "file"
         ? !fileFields.includes(field.id)
         : field.type === "checkbox"
           ? value !== true
-          : value === undefined || value === "" || (Array.isArray(value) && value.length === 0);
+          : value === undefined ||
+            value === "" ||
+            (Array.isArray(value) && value.length === 0);
     if (missing)
       throw new CmsError(
         "required_field",
@@ -355,49 +436,83 @@ export async function fillFields(
         const frame = frames.nth(i);
         if (
           (await frame.isVisible()) &&
-          (await frame.getAttribute("title"))?.replace(/^Editor,?\\s*/, "") === name
+          (await frame.getAttribute("title"))?.replace(/^Editor,?\s*/, "") ===
+            name
         )
           matches.push(frame);
       }
       if (matches.length !== 1)
-        throw new CmsError("page_changed", "CMS rich-text editor is missing or ambiguous.", {
-          field: key,
-        });
+        throw new CmsError(
+          "page_changed",
+          "CMS rich-text editor is missing or ambiguous.",
+          {
+            field: key,
+          },
+        );
       const handle = await matches[0].elementHandle(),
         frame = await handle?.contentFrame();
-      if (!frame) throw new CmsError("page_changed", "CMS rich-text editor is unavailable.");
+      if (!frame)
+        throw new CmsError(
+          "page_changed",
+          "CMS rich-text editor is unavailable.",
+        );
       node = frame.locator("body");
     } else if (field.type === "radio") {
       const option = field.options?.find(
-        (o) => !o.disabled && (o.value === String(value) || o.label === String(value)),
+        (o) =>
+          !o.disabled &&
+          (o.value === String(value) || o.label === String(value)),
       );
       if (!option)
-        throw new CmsError("invalid_choice", "Choose a current CMS radio option.", { field: key });
+        throw new CmsError(
+          "invalid_choice",
+          "Choose a current CMS radio option.",
+          { field: key },
+        );
       const radio =
         (await unique(
           scope.locator(
-            "input[type=radio][name=" + attr(field.id) + "][value=" + attr(option.value) + "]",
+            "input[type=radio][name=" +
+              attr(field.id) +
+              "][value=" +
+              attr(option.value) +
+              "]",
           ),
           field,
         )) ||
         (await unique(
           scope.locator(
-            "input[type=radio][id=" + attr(field.id) + "][value=" + attr(option.value) + "]",
+            "input[type=radio][id=" +
+              attr(field.id) +
+              "][value=" +
+              attr(option.value) +
+              "]",
           ),
           field,
         ));
       if (!radio)
-        throw new CmsError("page_changed", "CMS did not expose the approved radio choice.", {
-          field: key,
-        });
+        throw new CmsError(
+          "page_changed",
+          "CMS did not expose the approved radio choice.",
+          {
+            field: key,
+          },
+        );
       node = radio;
     } else {
       node = await fieldLocator(scope, field);
     }
-    if ((await node.isDisabled()) || (await node.getAttribute("readonly")) !== null)
-      throw new CmsError("invalid_field", "CMS no longer permits editing this field.", {
-        field: key,
-      });
+    if (
+      (await node.isDisabled()) ||
+      (await node.getAttribute("readonly")) !== null
+    )
+      throw new CmsError(
+        "invalid_field",
+        "CMS no longer permits editing this field.",
+        {
+          field: key,
+        },
+      );
     resolved.push({ field, value, node });
   }
   for (const { field, value, node } of resolved) {
@@ -411,7 +526,10 @@ export async function fillFields(
     }
     if (field.options) {
       const raw = (Array.isArray(value) ? value : [String(value)]).map(
-        (v) => field.options!.find((o) => !o.disabled && (o.value === v || o.label === v))!.value,
+        (v) =>
+          field.options!.find(
+            (o) => !o.disabled && (o.value === v || o.label === v),
+          )!.value,
       );
       // Native selects hidden by CMS widgets still own the change handler.
       await node.selectOption(raw, { force: true });

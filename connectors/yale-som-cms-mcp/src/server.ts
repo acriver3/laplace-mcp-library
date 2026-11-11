@@ -20,7 +20,12 @@ const readAnnotations = {
 const empty = z.object({}).strict();
 const query = readSchema.omit({ area: true }).strict();
 const detail = query.extend({ id: z.string().min(1).max(200) }).strict();
-const readTools: readonly [string, Area, "query" | "detail" | "empty", string][] = [
+const readTools: readonly [
+  string,
+  Area,
+  "query" | "detail" | "empty",
+  string,
+][] = [
   [
     "cms_get_dashboard",
     "dashboard",
@@ -123,7 +128,12 @@ const readTools: readonly [string, Area, "query" | "detail" | "empty", string][]
     "query",
     "Read your target employers or contacts, priorities, and statuses.",
   ],
-  ["cms_list_tasks", "tasks", "query", "Read your career tasks, filters, due dates, and status."],
+  [
+    "cms_list_tasks",
+    "tasks",
+    "query",
+    "Read your career tasks, filters, due dates, and status.",
+  ],
   ["cms_get_task", "tasks", "detail", "Read a specific career task."],
   [
     "cms_get_activity",
@@ -173,7 +183,12 @@ const readTools: readonly [string, Area, "query" | "detail" | "empty", string][]
     "query",
     "Read Job IQ results with their data source, cohort filters, currency, and any suppressed or unavailable values.",
   ],
-  ["cms_list_offices", "offices", "query", "Read school offices available through CMS."],
+  [
+    "cms_list_offices",
+    "offices",
+    "query",
+    "Read school offices available through CMS.",
+  ],
   ["cms_get_office", "offices", "detail", "Read one school office."],
   [
     "cms_list_saved_searches",
@@ -193,10 +208,18 @@ const readTools: readonly [string, Area, "query" | "detail" | "empty", string][]
     "query",
     "Read your employment statuses, experiences, and offer reports.",
   ],
-  ["cms_get_outcome", "outcomes", "detail", "Read one of your employment or offer reports."],
+  [
+    "cms_get_outcome",
+    "outcomes",
+    "detail",
+    "Read one of your employment or offer reports.",
+  ],
 ];
 
-export function createServer(adapter: CmsAdapter, service = new CmsService(adapter)) {
+export function createServer(
+  adapter: CmsAdapter,
+  service = new CmsService(adapter),
+) {
   const server = new McpServer(
     { name: "yale-som-cms-mcp", version: "0.1.0" },
     {
@@ -224,7 +247,12 @@ export function createServer(adapter: CmsAdapter, service = new CmsService(adapt
         } catch (error) {
           return {
             isError: true,
-            content: [{ type: "text" as const, text: JSON.stringify(errorResult(error)) }],
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(errorResult(error)),
+              },
+            ],
           };
         }
       },
@@ -243,7 +271,8 @@ export function createServer(adapter: CmsAdapter, service = new CmsService(adapt
       description,
       shape === "empty" ? empty : shape === "detail" ? detail : query,
       readAnnotations,
-      (value, signal) => service.read({ ...(value as Record<string, unknown>), area }, signal),
+      (value, signal) =>
+        service.read({ ...(value as Record<string, unknown>), area }, signal),
     );
   }
   tool(
@@ -267,12 +296,19 @@ export function createServer(adapter: CmsAdapter, service = new CmsService(adapt
     { ...readAnnotations, idempotentHint: false },
     (value, signal) => service.prepare(value, signal),
   );
-  const commitSchema = z.object({ draft_id: z.uuid(), confirm: z.literal(true) }).strict();
+  const commitSchema = z
+    .object({ draft_id: z.uuid(), confirm: z.literal(true) })
+    .strict();
   tool(
     "cms_commit_change",
     "Perform the exact preview once, only AFTER the user confirms all its details. Revalidates the account, target state, eligibility, and files. Never replay after failure or uncertainty. Inspect and reconcile partial results locally.",
     commitSchema,
-    { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+    {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     (value, signal) => {
       const input = commitSchema.parse(value);
       return service.commit(input.draft_id, input.confirm, signal);
@@ -288,7 +324,12 @@ export function createServer(adapter: CmsAdapter, service = new CmsService(adapt
         filename: z.string().min(1).max(255).optional(),
       })
       .strict(),
-    { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     (value, signal) => service.download(value, signal),
   );
   return server;

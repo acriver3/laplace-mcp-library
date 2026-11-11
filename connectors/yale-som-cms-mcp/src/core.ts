@@ -4,7 +4,11 @@ import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 
 import { z } from "zod";
 
-import { FileJournal, requiresReconciliation, type JournalRecord } from "./journal.js";
+import {
+  FileJournal,
+  requiresReconciliation,
+  type JournalRecord,
+} from "./journal.js";
 import {
   CmsError,
   TIMEZONE,
@@ -76,11 +80,20 @@ function validateChange(value: unknown): Change {
   const change = changeSchema.parse(value);
   const keys = Object.keys(change.fields);
   if (keys.some((k) => ["__proto__", "constructor", "prototype"].includes(k)))
-    throw new CmsError("invalid_field", "A reserved field name is not allowed.");
+    throw new CmsError(
+      "invalid_field",
+      "A reserved field name is not allowed.",
+    );
   if (new Set(change.files.map((f) => f.field)).size !== change.files.length)
-    throw new CmsError("invalid_file", "Each upload field may be specified only once.");
+    throw new CmsError(
+      "invalid_file",
+      "Each upload field may be specified only once.",
+    );
   if (change.files.some((f) => !isAbsolute(f.path)))
-    throw new CmsError("invalid_file", "Uploads require explicit absolute local file paths.");
+    throw new CmsError(
+      "invalid_file",
+      "Uploads require explicit absolute local file paths.",
+    );
   return change;
 }
 async function fileProof(
@@ -91,16 +104,24 @@ async function fileProof(
 ): Promise<FileProof> {
   const absolute = resolve(path);
   const canonical = await realpath(absolute).catch(() => {
-    throw new CmsError("invalid_file", "The selected upload file is unavailable.", {
-      field,
-      path: absolute,
-    });
+    throw new CmsError(
+      "invalid_file",
+      "The selected upload file is unavailable.",
+      {
+        field,
+        path: absolute,
+      },
+    );
   });
   const handle = await open(canonical, "r").catch(() => {
-    throw new CmsError("invalid_file", "The selected upload file cannot be read.", {
-      field,
-      path: absolute,
-    });
+    throw new CmsError(
+      "invalid_file",
+      "The selected upload file cannot be read.",
+      {
+        field,
+        path: absolute,
+      },
+    );
   });
   let target;
   try {
@@ -120,10 +141,14 @@ async function fileProof(
       if (!bytesRead) break;
       size += bytesRead;
       if (size > maxBytes)
-        throw new CmsError("invalid_file", "The upload exceeds the size limit.", {
-          field,
-          max_bytes: maxBytes,
-        });
+        throw new CmsError(
+          "invalid_file",
+          "The upload exceeds the size limit.",
+          {
+            field,
+            max_bytes: maxBytes,
+          },
+        );
       const bytes = buffer.subarray(0, bytesRead);
       hash.update(bytes);
       if (target) await target.write(bytes);
@@ -168,13 +193,19 @@ export class CmsService {
     this.now = options.now || Date.now;
     this.maxUploadBytes = options.maxUploadBytes ?? DEFAULT_MAX_UPLOAD_BYTES;
     if (!Number.isSafeInteger(this.maxUploadBytes) || this.maxUploadBytes < 1)
-      throw new CmsError("invalid_configuration", "maxUploadBytes must be a positive integer.");
+      throw new CmsError(
+        "invalid_configuration",
+        "maxUploadBytes must be a positive integer.",
+      );
     if (options.profileDir) this.journal = new FileJournal(options.profileDir);
   }
   private run<T>(work: () => Promise<T>, signal?: AbortSignal): Promise<T> {
     return this.queue.run(async () => {
       if (signal?.aborted)
-        throw new CmsError("cancelled", "The tool call was cancelled before execution.");
+        throw new CmsError(
+          "cancelled",
+          "The tool call was cancelled before execution.",
+        );
       let closing: Promise<void> | undefined;
       const abort = () => {
         closing = this.adapter.close().catch(() => {});
@@ -226,7 +257,11 @@ export class CmsService {
   async read(value: unknown, signal?: AbortSignal) {
     return this.run(async () => {
       const input = readSchema.parse(value);
-      if (input.start && input.end && Date.parse(input.end) < Date.parse(input.start))
+      if (
+        input.start &&
+        input.end &&
+        Date.parse(input.end) < Date.parse(input.start)
+      )
         throw new CmsError("invalid_time", "end must follow start.");
       return this.adapter.read(input);
     }, signal);
@@ -262,8 +297,15 @@ export class CmsService {
       for (const file of change.files)
         files.push(await fileProof(file.field, file.path, this.maxUploadBytes));
       const prepared = await this.adapter.prepare(change);
-      if (!prepared.identity || !prepared.preview || typeof prepared.preview !== "object")
-        throw new CmsError("invalid_preview", "CMS did not expose an account-bound preview.");
+      if (
+        !prepared.identity ||
+        !prepared.preview ||
+        typeof prepared.preview !== "object"
+      )
+        throw new CmsError(
+          "invalid_preview",
+          "CMS did not expose an account-bound preview.",
+        );
       // The core owns the exact change and file proofs even if a module omits a field.
       const preview = {
         ...prepared.preview,
@@ -358,7 +400,10 @@ export class CmsService {
           }
         }
         if (signal?.aborted)
-          throw new CmsError("cancelled", "The submission was cancelled before any remote change.");
+          throw new CmsError(
+            "cancelled",
+            "The submission was cancelled before any remote change.",
+          );
         if (draft.expires <= this.now())
           throw new CmsError(
             "draft_expired",
@@ -371,7 +416,10 @@ export class CmsService {
           area: change.area,
           ...(change.target_id ? { target_id: change.target_id } : {}),
           account_fingerprint: fingerprint(current.identity),
-          preview_fingerprint: fingerprint({ preview: current.preview, files: draft.files }),
+          preview_fingerprint: fingerprint({
+            preview: current.preview,
+            files: draft.files,
+          }),
           started_at: new Date(this.now()).toISOString(),
           updated_at: new Date(this.now()).toISOString(),
           status: "pending",
@@ -401,7 +449,11 @@ export class CmsService {
         };
         try {
           const result = await this.adapter.submit(change, recordEffect);
-          if (!["verified", "pending", "partial", "uncertain"].includes(result.status))
+          if (
+            !["verified", "pending", "partial", "uncertain"].includes(
+              result.status,
+            )
+          )
             throw new CmsError(
               "verification_failed",
               "CMS returned no recognizable submission outcome.",
@@ -410,17 +462,25 @@ export class CmsService {
           const verifiedEffects =
             effects.length > 0 && effects.every((e) => e.status === "verified");
           const blocked =
-            result.status === "partial" || result.status === "uncertain" || !verifiedEffects;
+            result.status === "partial" ||
+            result.status === "uncertain" ||
+            !verifiedEffects;
           record = {
             ...record,
-            status: blocked ? (result.status === "partial" ? "partial" : "uncertain") : "complete",
+            status: blocked
+              ? result.status === "partial"
+                ? "partial"
+                : "uncertain"
+              : "complete",
             updated_at: new Date(this.now()).toISOString(),
             effects: [...record.effects, ...effects].slice(-100),
           };
           await journal.write(record);
           if (blocked) {
             throw new CmsError(
-              result.status === "partial" ? "submission_partial" : "submission_uncertain",
+              result.status === "partial"
+                ? "submission_partial"
+                : "submission_uncertain",
               "Some or all steps may have reached CMS. Inspect the authoritative record and reconcile locally; do not replay this draft.",
               { operation_id: record.operation_id, result },
             );
@@ -452,12 +512,14 @@ export class CmsService {
           );
         }
       } finally {
-        if (staging) await rm(staging, { recursive: true, force: true }).catch(() => {});
+        if (staging)
+          await rm(staging, { recursive: true, force: true }).catch(() => {});
       }
     }, signal);
   }
   private async recovery(): Promise<JsonRecord> {
-    if (!this.journal) return { configured: false, blocked: this.unresolvedInMemory };
+    if (!this.journal)
+      return { configured: false, blocked: this.unresolvedInMemory };
     const record = await this.journal.read();
     return {
       configured: true,
@@ -479,7 +541,11 @@ export class CmsService {
   /** CLI-only: caller must hold the dedicated browser profile lock and inspect CMS first. */
   async acknowledgeUncertain(input: { acknowledge: true; note: string }) {
     return this.run(async () => {
-      if (input.acknowledge !== true || input.note.trim().length < 10 || input.note.length > 2000)
+      if (
+        input.acknowledge !== true ||
+        input.note.trim().length < 10 ||
+        input.note.length > 2000
+      )
         throw new CmsError(
           "acknowledgement_required",
           "Explicitly acknowledge the inspected outcome with a descriptive local note.",
@@ -492,11 +558,17 @@ export class CmsService {
             "journal_invalid",
             "No persisted receipt exists for the uncertain operation. Inspect local state before recovery.",
           );
-        return { acknowledged: false, reason: "No submission needs reconciliation." };
+        return {
+          acknowledged: false,
+          reason: "No submission needs reconciliation.",
+        };
       }
       if (!requiresReconciliation(record)) {
         this.unresolvedInMemory = false;
-        return { acknowledged: false, reason: "The latest submission is already resolved." };
+        return {
+          acknowledged: false,
+          reason: "The latest submission is already resolved.",
+        };
       }
       await journal.write({
         ...record,
@@ -506,7 +578,11 @@ export class CmsService {
       });
       this.unresolvedInMemory = false;
       this.drafts.clear();
-      return { acknowledged: true, operation_id: record.operation_id, replayed: false };
+      return {
+        acknowledged: true,
+        operation_id: record.operation_id,
+        replayed: false,
+      };
     });
   }
   async close() {

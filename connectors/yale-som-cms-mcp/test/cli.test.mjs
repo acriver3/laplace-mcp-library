@@ -8,7 +8,11 @@ import { test } from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
-import { ProfileLock, DEFAULT_PROFILE, DEFAULT_DOWNLOADS } from "../dist/browser.js";
+import {
+  ProfileLock,
+  DEFAULT_PROFILE,
+  DEFAULT_DOWNLOADS,
+} from "../dist/browser.js";
 import { parseCliArgs, runCli, VERSION } from "../dist/cli.js";
 import { CmsService } from "../dist/core.js";
 import { CmsError } from "../dist/types.js";
@@ -64,7 +68,18 @@ async function fixture(t) {
     writeErr: (text) => err.push(text),
   };
   const args = ["--profile-dir", profile, "--downloads-dir", downloads];
-  return { dir, profile, downloads, calls, out, err, adapter, browser, dependencies, args };
+  return {
+    dir,
+    profile,
+    downloads,
+    calls,
+    out,
+    err,
+    adapter,
+    browser,
+    dependencies,
+    args,
+  };
 }
 test("CLI defaults select a dedicated saved Chrome profile and separate downloads", () => {
   const c = parseCliArgs([]);
@@ -91,7 +106,13 @@ test("CLI rejects unsupported browsers, attachment flags, relative folders, and 
     ["serve", "--cdp", "9222"],
     ["serve", "--profile-dir", "relative"],
     ["serve", "--downloads-dir", "relative"],
-    ["serve", "--profile-dir", f.profile, "--downloads-dir", join(f.profile, "downloads")],
+    [
+      "serve",
+      "--profile-dir",
+      f.profile,
+      "--downloads-dir",
+      join(f.profile, "downloads"),
+    ],
     ["serve", "--acknowledge-uncertain", "--note", "I inspected CMS"],
     ["login", "--release-stale-lock"],
     ["status", "--note", "I inspected CMS"],
@@ -122,7 +143,9 @@ test("manual login passes only the bounded timeout and prints sanitized identity
     f.calls.find((x) => Array.isArray(x) && x[0] === "login"),
     ["login", 60000],
   );
-  const configuration = f.calls.find((x) => Array.isArray(x) && x[0] === "runtime")[1];
+  const configuration = f.calls.find(
+    (x) => Array.isArray(x) && x[0] === "runtime",
+  )[1];
   assert.equal(configuration.command, "login");
   assert.equal(configuration.browser, "msedge");
   assert.match(f.err[0], /visible dedicated browser/);
@@ -132,7 +155,10 @@ test("manual login passes only the bounded timeout and prints sanitized identity
 });
 test("status acquires the profile lock before reading account and recovery state", async (t) => {
   const f = await fixture(t);
-  assert.equal(await runCli(["status", ...f.args, "--release-stale-lock"], f.dependencies), 0);
+  assert.equal(
+    await runCli(["status", ...f.args, "--release-stale-lock"], f.dependencies),
+    0,
+  );
   assert.ok(f.calls.indexOf("release-stale") < f.calls.indexOf("acquire"));
   assert.ok(f.calls.indexOf("acquire") < f.calls.indexOf("identity"));
   const status = JSON.parse(f.out[0]);
@@ -148,7 +174,9 @@ test("explicit status acknowledgment records the inspected outcome without repla
     area: "tasks",
     fields: { subject: "Fixture" },
   });
-  await assert.rejects(() => service.commit(p.draft_id, true), { code: "submission_uncertain" });
+  await assert.rejects(() => service.commit(p.draft_id, true), {
+    code: "submission_uncertain",
+  });
   let submits = 0;
   f.adapter.submit = async () => {
     submits++;
@@ -156,7 +184,13 @@ test("explicit status acknowledgment records the inspected outcome without repla
   };
   assert.equal(
     await runCli(
-      ["status", ...f.args, "--acknowledge-uncertain", "--note", "Inspected CMS: the task exists."],
+      [
+        "status",
+        ...f.args,
+        "--acknowledge-uncertain",
+        "--note",
+        "Inspected CMS: the task exists.",
+      ],
       f.dependencies,
     ),
     0,
@@ -166,7 +200,9 @@ test("explicit status acknowledgment records the inspected outcome without repla
   assert.equal(status.acknowledgement.replayed, false);
   assert.equal(status.recovery.blocked, false);
   assert.equal(submits, 0);
-  const journal = JSON.parse(await readFile(f.profile + ".cms-journal.json", "utf8"));
+  const journal = JSON.parse(
+    await readFile(f.profile + ".cms-journal.json", "utf8"),
+  );
   assert.equal(journal.status, "acknowledged");
   assert.equal(journal.acknowledgement, "Inspected CMS: the task exists.");
 });
@@ -174,12 +210,20 @@ test("failed authentication cannot erase or acknowledge an uncertain receipt", a
   const f = await fixture(t),
     service = new CmsService(f.adapter, { profileDir: f.profile });
   const p = await service.prepare({ operation: "task_create", area: "tasks" });
-  await assert.rejects(() => service.commit(p.draft_id, true), { code: "submission_uncertain" });
+  await assert.rejects(() => service.commit(p.draft_id, true), {
+    code: "submission_uncertain",
+  });
   f.adapter.identity = async () => {
     throw new CmsError("auth_required", "Sign in again.");
   };
   const code = await runCli(
-    ["status", ...f.args, "--acknowledge-uncertain", "--note", "Inspected CMS in my account."],
+    [
+      "status",
+      ...f.args,
+      "--acknowledge-uncertain",
+      "--note",
+      "Inspected CMS in my account.",
+    ],
     f.dependencies,
   );
   assert.equal(code, 1);
@@ -196,7 +240,10 @@ test("status recovery cannot release a live owner's lock", async (t) => {
   await owner.acquire();
   t.after(() => owner.release());
   f.browser.lock = new ProfileLock(f.profile);
-  const code = await runCli(["status", ...f.args, "--release-stale-lock"], f.dependencies);
+  const code = await runCli(
+    ["status", ...f.args, "--release-stale-lock"],
+    f.dependencies,
+  );
   assert.equal(code, 1);
   assert.equal(f.out.length, 0);
   assert.equal(JSON.parse(f.err[0]).code, "profile_busy");
@@ -233,7 +280,9 @@ test("manifest identity and setup arguments match CLI and keep downloads separat
   assert.equal(manifest.version, VERSION);
   assert.equal(manifest.display_name, "Yale SOM CMS [Background Browser]");
   assert.deepEqual(manifest.compatibility.platforms, ["win32"]);
-  assert.deepEqual(manifest._meta["com.withlaplace.catalog"].platforms, ["win32-x64"]);
+  assert.deepEqual(manifest._meta["com.withlaplace.catalog"].platforms, [
+    "win32-x64",
+  ]);
   const args = manifest.server.mcp_config.args;
   assert.ok(args.includes("--profile-dir"));
   assert.ok(args.includes("--browser"));

@@ -9,7 +9,13 @@ import { BrowserAdapter } from "./adapter.js";
 import { CmsBrowser, DEFAULT_DOWNLOADS, DEFAULT_PROFILE } from "./browser.js";
 import { CmsService } from "./core.js";
 import { createServer } from "./server.js";
-import { CmsError, TIMEZONE, errorResult, type CmsAdapter, type Identity } from "./types.js";
+import {
+  CmsError,
+  TIMEZONE,
+  errorResult,
+  type CmsAdapter,
+  type Identity,
+} from "./types.js";
 
 export const VERSION = "0.1.0";
 export const HELP = `yale-som-cms-mcp <login|status|serve> [options]
@@ -79,9 +85,15 @@ export function parseCliArgs(args: string[]): CliConfig {
   const help = values.help === true,
     version = values.version === true;
   if (!["login", "status", "serve"].includes(command) || positionals.length > 1)
-    throw new CmsError("invalid_arguments", "Use one command: login, status, or serve.");
+    throw new CmsError(
+      "invalid_arguments",
+      "Use one command: login, status, or serve.",
+    );
   if (!["chrome", "msedge"].includes(channel))
-    throw new CmsError("invalid_arguments", "browser must be chrome or msedge.");
+    throw new CmsError(
+      "invalid_arguments",
+      "browser must be chrome or msedge.",
+    );
   if (!isAbsolute(profileDir) || !isAbsolute(downloadsDir))
     throw new CmsError(
       "invalid_arguments",
@@ -94,7 +106,10 @@ export function parseCliArgs(args: string[]): CliConfig {
       downloadRelative !== ".." &&
       !downloadRelative.startsWith(".." + sep))
   )
-    throw new CmsError("invalid_arguments", "Keep downloads outside the private browser profile.");
+    throw new CmsError(
+      "invalid_arguments",
+      "Keep downloads outside the private browser profile.",
+    );
   if (!Number.isInteger(timeout) || timeout < 1 || timeout > 3600)
     throw new CmsError(
       "invalid_arguments",
@@ -104,18 +119,30 @@ export function parseCliArgs(args: string[]): CliConfig {
     (a) => a === "--login-timeout" || a.startsWith("--login-timeout="),
   );
   if (command !== "login" && explicitTimeout && !help)
-    throw new CmsError("invalid_arguments", "login-timeout is available only for login.");
+    throw new CmsError(
+      "invalid_arguments",
+      "login-timeout is available only for login.",
+    );
   const releaseStaleLock = values["release-stale-lock"] === true,
     acknowledgeUncertain = values["acknowledge-uncertain"] === true;
   const note = typeof values.note === "string" ? values.note : undefined;
-  if (command !== "status" && (releaseStaleLock || acknowledgeUncertain || note !== undefined))
+  if (
+    command !== "status" &&
+    (releaseStaleLock || acknowledgeUncertain || note !== undefined)
+  )
     throw new CmsError(
       "invalid_arguments",
       "Recovery flags are available only on the explicit status command.",
     );
   if (note !== undefined && !acknowledgeUncertain)
-    throw new CmsError("invalid_arguments", "note is valid only with acknowledge-uncertain.");
-  if (acknowledgeUncertain && (!note || note.trim().length < 10 || note.length > 2000))
+    throw new CmsError(
+      "invalid_arguments",
+      "note is valid only with acknowledge-uncertain.",
+    );
+  if (
+    acknowledgeUncertain &&
+    (!note || note.trim().length < 10 || note.length > 2000)
+  )
     throw new CmsError(
       "invalid_arguments",
       "Acknowledgment requires --note with a descriptive outcome you inspected in CMS.",
@@ -139,7 +166,10 @@ interface CliBrowser {
   login(timeoutMs: number): Promise<Identity>;
 }
 export interface CliDependencies {
-  createRuntime?: (config: CliConfig) => { browser: CliBrowser; adapter: CmsAdapter };
+  createRuntime?: (config: CliConfig) => {
+    browser: CliBrowser;
+    adapter: CmsAdapter;
+  };
   writeOut?: (text: string) => void;
   writeErr?: (text: string) => void;
 }
@@ -203,7 +233,8 @@ export async function runCli(
     const browser = runtime.browser;
     adapter = runtime.adapter;
     service = new CmsService(adapter, { profileDir: browser.profile });
-    for (const name of ["SIGINT", "SIGTERM", "SIGHUP"] as const) process.once(name, signal);
+    for (const name of ["SIGINT", "SIGTERM", "SIGHUP"] as const)
+      process.once(name, signal);
     listening = true;
     if (config.command === "login") {
       err(
@@ -230,7 +261,11 @@ export async function runCli(
           note: config.note!,
         });
         out(
-          JSON.stringify({ ...status, recovery: await service.recoveryStatus(), acknowledgement }),
+          JSON.stringify({
+            ...status,
+            recovery: await service.recoveryStatus(),
+            acknowledgement,
+          }),
         );
       } else out(JSON.stringify(status));
     } else {
@@ -256,6 +291,9 @@ export async function runCli(
     process.stdin.removeListener("error", end);
   }
 }
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(resolve(process.argv[1])).href
+) {
   process.exitCode = await runCli();
 }

@@ -24,14 +24,22 @@ const journalSchema = z
     preview_fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
     started_at: z.iso.datetime(),
     updated_at: z.iso.datetime(),
-    status: z.enum(["pending", "uncertain", "partial", "complete", "acknowledged"]),
+    status: z.enum([
+      "pending",
+      "uncertain",
+      "partial",
+      "complete",
+      "acknowledged",
+    ]),
     effects: z.array(effectSchema).max(100),
     acknowledgement: z.string().max(2000).optional(),
   })
   .strict();
 export type JournalRecord = z.infer<typeof journalSchema>;
 export function requiresReconciliation(record: JournalRecord | null) {
-  return !!record && ["pending", "uncertain", "partial"].includes(record.status);
+  return (
+    !!record && ["pending", "uncertain", "partial"].includes(record.status)
+  );
 }
 /** Durable, minimal receipt. Answers, cookies and document bytes are never journaled. */
 export class FileJournal {
@@ -50,7 +58,10 @@ export class FileJournal {
       text = await readFile(this.file, "utf8");
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
-      throw new CmsError("journal_unavailable", "Could not read the local submission journal.");
+      throw new CmsError(
+        "journal_unavailable",
+        "Could not read the local submission journal.",
+      );
     }
     try {
       return journalSchema.parse(JSON.parse(text));

@@ -16,7 +16,7 @@
     "build": "tsc",
     "type-check": "tsc --noEmit",
     "test": "tsc && node --test test/*.test.mjs",
-    "test:browser": "tsc && node --test test/*.browser.mjs"
+    "test:browser": "tsc && node --test --test-concurrency=2 test/*.browser.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",

@@ -1,5 +1,13 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, writeFile, mkdir, rm, symlink, access } from "node:fs/promises";
+import {
+  mkdtemp,
+  readFile,
+  writeFile,
+  mkdir,
+  rm,
+  symlink,
+  access,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { test } from "node:test";
@@ -22,10 +30,20 @@ const result = {
 async function fixture(t, overrides = {}, options = {}) {
   const dir = await mkdtemp(join(tmpdir(), "cms-core-"));
   t.after(() => rm(dir, { recursive: true, force: true }));
-  const state = { identity: "secret-session-key", version: 1, submits: 0, closes: 0, reads: 0 };
+  const state = {
+    identity: "secret-session-key",
+    version: 1,
+    submits: 0,
+    closes: 0,
+    reads: 0,
+  };
   const adapter = {
     async identity() {
-      return { key: state.identity, name: "Fixture Student", account_id: "student-1" };
+      return {
+        key: state.identity,
+        name: "Fixture Student",
+        account_id: "student-1",
+      };
     },
     async read(input) {
       state.reads++;
@@ -66,8 +84,16 @@ async function fixture(t, overrides = {}, options = {}) {
     },
     async submit(input, recordEffect) {
       state.submits++;
-      await recordEffect({ name: input.operation, status: "intended", target: "42" });
-      await recordEffect({ name: input.operation, status: "verified", target: "42" });
+      await recordEffect({
+        name: input.operation,
+        status: "intended",
+        target: "42",
+      });
+      await recordEffect({
+        name: input.operation,
+        status: "verified",
+        target: "42",
+      });
       return structuredClone(result);
     },
     async download(input) {
@@ -80,7 +106,14 @@ async function fixture(t, overrides = {}, options = {}) {
   };
   const profile = join(dir, "profile"),
     service = new CmsService(adapter, { profileDir: profile, ...options });
-  return { dir, profile, service, adapter, state, journal: profile + ".cms-journal.json" };
+  return {
+    dir,
+    profile,
+    service,
+    adapter,
+    state,
+    journal: profile + ".cms-journal.json",
+  };
 }
 test("previews are local, immutable, complete, and have a ten-minute lifetime", async (t) => {
   let now = 100000;
@@ -95,7 +128,9 @@ test("previews are local, immutable, complete, and have a ten-minute lifetime", 
   const receipt = await f.service.commit(prepared.draft_id, true);
   assert.equal(receipt.status, "verified");
   assert.equal(f.state.submits, 1);
-  await assert.rejects(() => f.service.commit(prepared.draft_id, true), { code: "draft_expired" });
+  await assert.rejects(() => f.service.commit(prepared.draft_id, true), {
+    code: "draft_expired",
+  });
 });
 test("confirmation is mandatory, and concurrent confirmations cannot duplicate a change", async (t) => {
   const f = await fixture(t);
@@ -108,7 +143,10 @@ test("confirmation is mandatory, and concurrent confirmations cannot duplicate a
     f.service.commit(prepared.draft_id, true),
   ]);
   assert.equal(outcomes.filter((x) => x.status === "fulfilled").length, 1);
-  assert.equal(outcomes.filter((x) => x.status === "rejected")[0].reason.code, "draft_expired");
+  assert.equal(
+    outcomes.filter((x) => x.status === "rejected")[0].reason.code,
+    "draft_expired",
+  );
   assert.equal(f.state.submits, 1);
 });
 test("expired previews are consumed before asynchronous work", async (t) => {
@@ -116,7 +154,9 @@ test("expired previews are consumed before asynchronous work", async (t) => {
   const f = await fixture(t, {}, { now: () => now });
   const prepared = await f.service.prepare(change);
   now += DRAFT_TTL_MS;
-  await assert.rejects(() => f.service.commit(prepared.draft_id, true), { code: "draft_expired" });
+  await assert.rejects(() => f.service.commit(prepared.draft_id, true), {
+    code: "draft_expired",
+  });
   assert.equal(f.state.submits, 0);
 });
 test("a preview expiring during state revalidation does not submit", async (t) => {
@@ -129,7 +169,9 @@ test("a preview expiring during state revalidation does not submit", async (t) =
     now += DRAFT_TTL_MS;
     return p;
   };
-  await assert.rejects(() => f.service.commit(prepared.draft_id, true), { code: "draft_expired" });
+  await assert.rejects(() => f.service.commit(prepared.draft_id, true), {
+    code: "draft_expired",
+  });
   assert.equal(f.state.submits, 0);
 });
 for (const [label, mutate, code] of [
@@ -152,7 +194,9 @@ for (const [label, mutate, code] of [
     const f = await fixture(t),
       prepared = await f.service.prepare(change);
     mutate(f.state);
-    await assert.rejects(() => f.service.commit(prepared.draft_id, true), { code });
+    await assert.rejects(() => f.service.commit(prepared.draft_id, true), {
+      code,
+    });
     assert.equal(f.state.submits, 0);
     await assert.rejects(() => f.service.commit(prepared.draft_id, true), {
       code: "draft_expired",
@@ -184,11 +228,14 @@ test("changed uploads are rejected before submission", async (t) => {
     files: [{ field: "file", path: file }],
   });
   await writeFile(file, "version b");
-  await assert.rejects(() => f.service.commit(p.draft_id, true), { code: "file_changed" });
+  await assert.rejects(() => f.service.commit(p.draft_id, true), {
+    code: "file_changed",
+  });
   assert.equal(f.state.submits, 0);
 });
 test("a symlink changing targets invalidates the preview even with identical bytes", async (t) => {
-  if (process.platform === "win32") return t.skip("Symlink privileges are platform-dependent");
+  if (process.platform === "win32")
+    return t.skip("Symlink privileges are platform-dependent");
   const f = await fixture(t),
     a = join(f.dir, "a.pdf"),
     b = join(f.dir, "b.pdf"),
@@ -203,7 +250,9 @@ test("a symlink changing targets invalidates the preview even with identical byt
   });
   await rm(link);
   await symlink(b, link);
-  await assert.rejects(() => f.service.commit(p.draft_id, true), { code: "file_changed" });
+  await assert.rejects(() => f.service.commit(p.draft_id, true), {
+    code: "file_changed",
+  });
   assert.equal(f.state.submits, 0);
 });
 test("confirmed uploads use a private immutable snapshot and clean it up", async (t) => {
@@ -245,7 +294,9 @@ test("upload policy rejects relative paths, duplicate fields, directories, empty
     [{ field: "f", path: empty }],
     [{ field: "f", path: file }],
   ]) {
-    await assert.rejects(() => f.service.prepare({ ...change, files }), { code: "invalid_file" });
+    await assert.rejects(() => f.service.prepare({ ...change, files }), {
+      code: "invalid_file",
+    });
   }
   assert.equal(f.state.submits, 0);
 });
@@ -268,9 +319,15 @@ test("journal intent is durable before every remote effect and omits private ans
     assert.equal(journal.includes("omit-this"), false);
     return structuredClone(result);
   };
-  const p = await f.service.prepare({ ...change, fields: { subject: "Private salary answer" } });
+  const p = await f.service.prepare({
+    ...change,
+    fields: { subject: "Private salary answer" },
+  });
   await f.service.commit(p.draft_id, true);
-  assert.equal(JSON.parse(await readFile(f.journal, "utf8")).status, "complete");
+  assert.equal(
+    JSON.parse(await readFile(f.journal, "utf8")).status,
+    "complete",
+  );
 });
 test("an uncertain submission blocks new writes across restart, while reads remain available", async (t) => {
   const f = await fixture(t);
@@ -281,16 +338,23 @@ test("an uncertain submission blocks new writes across restart, while reads rema
   const p = await f.service.prepare(change);
   await assert.rejects(
     () => f.service.commit(p.draft_id, true),
-    (e) => e.code === "submission_uncertain" && !JSON.stringify(e).includes("do not leak"),
+    (e) =>
+      e.code === "submission_uncertain" &&
+      !JSON.stringify(e).includes("do not leak"),
   );
   const restarted = new CmsService(f.adapter, { profileDir: f.profile });
-  await assert.rejects(() => restarted.prepare(change), { code: "reconciliation_required" });
+  await assert.rejects(() => restarted.prepare(change), {
+    code: "reconciliation_required",
+  });
   assert.equal((await restarted.read({ area: "tasks" })).area, "tasks");
   assert.equal((await restarted.sessionStatus()).recovery.blocked, true);
   assert.equal(f.state.submits, 1);
-  await assert.rejects(() => restarted.acknowledgeUncertain({ acknowledge: true, note: "okay" }), {
-    code: "acknowledgement_required",
-  });
+  await assert.rejects(
+    () => restarted.acknowledgeUncertain({ acknowledge: true, note: "okay" }),
+    {
+      code: "acknowledgement_required",
+    },
+  );
   const recovery = await restarted.acknowledgeUncertain({
     acknowledge: true,
     note: "Inspected CMS tasks; the intended task was created.",
@@ -316,17 +380,27 @@ test("verified partial completion is preserved and still blocks replay", async (
   const p = await f.service.prepare(change);
   await assert.rejects(
     () => f.service.commit(p.draft_id, true),
-    (e) => e.code === "submission_partial" && e.details.result.result.document_id === "doc-1",
+    (e) =>
+      e.code === "submission_partial" &&
+      e.details.result.result.document_id === "doc-1",
   );
   const journal = JSON.parse(await readFile(f.journal, "utf8"));
   assert.equal(journal.status, "partial");
-  assert.ok(journal.effects.some((e) => e.name === "upload" && e.status === "verified"));
-  await assert.rejects(() => f.service.prepare(change), { code: "reconciliation_required" });
+  assert.ok(
+    journal.effects.some((e) => e.name === "upload" && e.status === "verified"),
+  );
+  await assert.rejects(() => f.service.prepare(change), {
+    code: "reconciliation_required",
+  });
 });
 test("pending server approval is a verified state, not falsely reported as completion", async (t) => {
   const f = await fixture(t, {
     async submit() {
-      return { ...result, status: "pending", result: { registration_status: "waitlisted" } };
+      return {
+        ...result,
+        status: "pending",
+        result: { registration_status: "waitlisted" },
+      };
     },
   });
   const p = await f.service.prepare(change);
@@ -351,14 +425,18 @@ test("a pending journal from an interrupted process is never replayed", async (t
     committing = f.service.commit(p.draft_id, true);
   await started;
   const second = new CmsService(f.adapter, { profileDir: f.profile });
-  await assert.rejects(() => second.prepare(change), { code: "reconciliation_required" });
+  await assert.rejects(() => second.prepare(change), {
+    code: "reconciliation_required",
+  });
   release(result);
   await committing;
 });
 test("malformed or unavailable journals fail closed without deleting evidence", async (t) => {
   const f = await fixture(t);
   await writeFile(f.journal, "not valid JSON");
-  await assert.rejects(() => f.service.prepare(change), { code: "journal_invalid" });
+  await assert.rejects(() => f.service.prepare(change), {
+    code: "journal_invalid",
+  });
   assert.equal(await readFile(f.journal, "utf8"), "not valid JSON");
   await assert.rejects(
     () =>
@@ -374,7 +452,9 @@ test("writes require a configured journal but safe read discovery does not", asy
   const f = await fixture(t),
     s = new CmsService(f.adapter);
   assert.equal((await s.sessionStatus()).authenticated, true);
-  await assert.rejects(() => s.prepare(change), { code: "journal_unconfigured" });
+  await assert.rejects(() => s.prepare(change), {
+    code: "journal_unconfigured",
+  });
 });
 test("all service adapter operations are serialized and cancelled waiting calls do not close a running browser", async (t) => {
   const f = await fixture(t);
@@ -422,18 +502,28 @@ test("cancelling an active commit closes the adapter and preserves an uncertain 
   controller.abort();
   await assert.rejects(() => committing, { code: "submission_uncertain" });
   assert.equal(f.state.closes, 1);
-  assert.equal(JSON.parse(await readFile(f.journal, "utf8")).status, "uncertain");
+  assert.equal(
+    JSON.parse(await readFile(f.journal, "utf8")).status,
+    "uncertain",
+  );
 });
 test("download names and areas cannot turn a document read into arbitrary file access", async (t) => {
   const f = await fixture(t);
   for (const filename of ["../resume.pdf", "../x", "a/b", "a\\b", ".."]) {
-    await assert.rejects(() => f.service.download({ area: "resources", id: "1", filename }), {
-      code: "invalid_filename",
-    });
+    await assert.rejects(
+      () => f.service.download({ area: "resources", id: "1", filename }),
+      {
+        code: "invalid_filename",
+      },
+    );
   }
   await assert.rejects(() => f.service.download({ area: "settings", id: "1" }));
   assert.deepEqual(
-    await f.service.download({ area: "resources", id: "1", filename: "career.pdf" }),
+    await f.service.download({
+      area: "resources",
+      id: "1",
+      filename: "career.pdf",
+    }),
     { area: "resources", id: "1", filename: "career.pdf" },
   );
 });
@@ -449,7 +539,8 @@ for (const effects of [
   [{ name: "apply", status: "uncertain" }],
 ])
   test(
-    "a claimed success without verified effects remains uncertain: " + JSON.stringify(effects),
+    "a claimed success without verified effects remains uncertain: " +
+      JSON.stringify(effects),
     async (t) => {
       const f = await fixture(t, {
         async submit() {
@@ -473,6 +564,8 @@ test("a journal persistence failure prevents the first remote effect", async (t)
     await mkdir(f.journal);
     return current;
   };
-  await assert.rejects(() => f.service.commit(p.draft_id, true), { code: "journal_unavailable" });
+  await assert.rejects(() => f.service.commit(p.draft_id, true), {
+    code: "journal_unavailable",
+  });
   assert.equal(f.state.submits, 0);
 });

@@ -12,7 +12,11 @@ import {
 } from "../dist/forms.js";
 let browser;
 before(async () => {
-  browser = await chromium.launch({ channel: "chrome", headless: true, args: ["--no-sandbox"] });
+  browser = await chromium.launch({
+    channel: "chrome",
+    headless: true,
+    args: ["--no-sandbox"],
+  });
 });
 after(async () => {
   await browser?.close();
@@ -35,7 +39,8 @@ async function fixture(t, html) {
   });
   return { page, scope: page.locator("main") };
 }
-const rejects = (promise, code) => assert.rejects(promise, (error) => error.code === code);
+const rejects = (promise, code) =>
+  assert.rejects(promise, (error) => error.code === code);
 
 test("form discovery rejects duplicate names and does not trigger field changes", async (t) => {
   const { page, scope } = await fixture(
@@ -44,10 +49,12 @@ test("form discovery rejects duplicate names and does not trigger field changes"
   );
   await rejects(inspectFields(scope), "ambiguous_field");
   assert.equal(await page.evaluate(() => window.fieldChanges), 0);
-  assert.deepEqual(await scope.locator("input").evaluateAll((nodes) => nodes.map((n) => n.value)), [
-    "one",
-    "two",
-  ]);
+  assert.deepEqual(
+    await scope
+      .locator("input")
+      .evaluateAll((nodes) => nodes.map((n) => n.value)),
+    ["one", "two"],
+  );
 });
 
 test("required checkbox is discovered unchecked and cannot be prepared as false", async (t) => {
@@ -103,7 +110,10 @@ test("hidden native select resolves through visible named tt-input without match
   assert.equal(fields.length, 1);
   assert.equal(fields[0].type, "select");
   assert.equal(fields[0].options.find((o) => o.value === "old").disabled, true);
-  assert.equal(await (await fieldLocator(scope, fields[0])).evaluate((e) => e.tagName), "SELECT");
+  assert.equal(
+    await (await fieldLocator(scope, fields[0])).evaluate((e) => e.tagName),
+    "SELECT",
+  );
   assert.equal(await page.evaluate(() => window.fieldChanges), 0);
   await fillFields(scope, fields, { industry: "Technology" });
   assert.equal(await scope.locator("select").inputValue(), "tech");
@@ -134,7 +144,10 @@ test("late duplicate field is rejected before an earlier autosaving field change
     const clone = el.querySelector('[name="later"]').cloneNode();
     el.append(clone);
   });
-  await rejects(fillFields(scope, fields, { first: "after", later: "after" }), "ambiguous_field");
+  await rejects(
+    fillFields(scope, fields, { first: "after", later: "after" }),
+    "ambiguous_field",
+  );
   assert.equal(await scope.locator('[name="first"]').inputValue(), "before");
   assert.equal(await page.evaluate(() => window.fieldChanges), 0);
 });
@@ -145,11 +158,17 @@ test("unknown or newly disabled later field prevents all earlier edits", async (
     '<main><input name="first" value="before"><input name="later" value="before"></main>',
   );
   const fields = await inspectFields(scope);
-  await rejects(fillFields(scope, fields, { first: "after", unknown: "after" }), "invalid_field");
+  await rejects(
+    fillFields(scope, fields, { first: "after", unknown: "after" }),
+    "invalid_field",
+  );
   await scope.locator('[name="later"]').evaluate((el) => {
     el.disabled = true;
   });
-  await rejects(fillFields(scope, fields, { first: "after", later: "after" }), "invalid_field");
+  await rejects(
+    fillFields(scope, fields, { first: "after", later: "after" }),
+    "invalid_field",
+  );
   assert.equal(await scope.locator('[name="first"]').inputValue(), "before");
   assert.equal(await page.evaluate(() => window.fieldChanges), 0);
 });
@@ -173,11 +192,19 @@ test("file fields bind their exact named or wrapper control and ambiguous fallba
     '<main><tt-input name="resume" style="display:block"><input type="file"></tt-input></main>',
   );
   const wrapped = await inspectFields(scope);
-  assert.equal(await (await fieldLocator(scope, wrapped[0])).getAttribute("type"), "file");
+  assert.equal(
+    await (await fieldLocator(scope, wrapped[0])).getAttribute("type"),
+    "file",
+  );
   await page.setContent('<main><input type="file"><input type="file"></main>');
   await rejects(inspectFields(scope), "ambiguous_field");
   await rejects(
-    fieldLocator(scope, { id: "file", label: "file", type: "file", required: false }),
+    fieldLocator(scope, {
+      id: "file",
+      label: "file",
+      type: "file",
+      required: false,
+    }),
     "ambiguous_field",
   );
 });
@@ -208,4 +235,24 @@ test("duplicate generated labels, anonymous required fields, and duplicate edito
     '<main><iframe title="Editor, Summary"></iframe><iframe title="Editor, Summary"></iframe></main>',
   );
   await rejects(inspectFields(scope), "ambiguous_field");
+});
+
+test("approved rich-text updates bind the same editor title discovered in the preview", async (t) => {
+  const { page, scope } = await fixture(
+    t,
+    '<main><iframe title="Editor, Summary"></iframe></main>',
+  );
+  await page.locator("iframe").evaluate((e) => {
+    e.contentDocument.body.contentEditable = "true";
+    e.contentDocument.body.innerText = "Before";
+  });
+  const fields = await inspectFields(scope);
+  assert.equal(fields[0].id, "editor:Summary");
+  await fillFields(scope, fields, { "editor:Summary": "Approved summary" });
+  assert.equal(
+    await page
+      .locator("iframe")
+      .evaluate((e) => e.contentDocument.body.innerText),
+    "Approved summary",
+  );
 });

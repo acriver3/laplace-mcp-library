@@ -16,12 +16,12 @@ export interface CompletionOptions {
 }
 
 async function visible(locator: Locator): Promise<boolean> {
-  return (await locator.count()) === 1 && await locator.isVisible();
+  return (await locator.count()) === 1 && (await locator.isVisible());
 }
 async function disappeared(locator: Locator): Promise<boolean> {
   const count = await locator.count();
   // A new ambiguous match is not evidence that the approved form went away.
-  return count === 0 || count === 1 && !await locator.isVisible();
+  return count === 0 || (count === 1 && !(await locator.isVisible()));
 }
 
 /** Observe transport/UI completion before a caller navigates to verify persisted state.
@@ -37,13 +37,21 @@ export async function observeCompletion<T>(
 ): Promise<T> {
   const timeoutMs = options.timeoutMs ?? 30_000;
   const settleMs = options.settleMs ?? 250;
-  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0 ||
-      !Number.isFinite(settleMs) || settleMs < 0 || settleMs >= timeoutMs)
-    throw new CmsError("invalid_configuration", "Completion requires a finite positive timeout and a shorter nonnegative settle period.");
+  if (
+    !Number.isFinite(timeoutMs) ||
+    timeoutMs <= 0 ||
+    !Number.isFinite(settleMs) ||
+    settleMs < 0 ||
+    settleMs >= timeoutMs
+  )
+    throw new CmsError(
+      "invalid_configuration",
+      "Completion requires a finite positive timeout and a shorter nonnegative settle period.",
+    );
   const startUrl = page.url();
   const initiallyVisible: Locator[] = [];
   for (const locator of [options.form, options.finalControl])
-    if (locator && await visible(locator)) initiallyVisible.push(locator);
+    if (locator && (await visible(locator))) initiallyVisible.push(locator);
 
   const pending = new Set<Request>();
   let completedWrites = 0;
@@ -51,7 +59,11 @@ export async function observeCompletion<T>(
   let activity = 0;
   const onRequest = (request: Request) => {
     const url = new URL(request.url());
-    if (url.origin !== CMS_ORIGIN || isReadRequest(request.method(), request.url())) return;
+    if (
+      url.origin !== CMS_ORIGIN ||
+      isReadRequest(request.method(), request.url())
+    )
+      return;
     pending.add(request);
     activity++;
   };
@@ -64,7 +76,8 @@ export async function observeCompletion<T>(
     // These statuses have no response body by HTTP definition. Chromium can
     // subsequently label a fulfilled 204 as net::ERR_ABORTED; headers already
     // completed this transport, without proving the intended CMS outcome.
-    if ([204, 205, 304].includes(response.status())) onFinished(response.request());
+    if ([204, 205, 304].includes(response.status()))
+      onFinished(response.request());
   };
   const onFailed = (request: Request) => {
     if (!pending.delete(request)) return;
@@ -79,8 +92,12 @@ export async function observeCompletion<T>(
     let result!: T;
     let actionFailed = false;
     let actionError: unknown;
-    try { result = await action(); }
-    catch (error) { actionFailed = true; actionError = error; }
+    try {
+      result = await action();
+    } catch (error) {
+      actionFailed = true;
+      actionError = error;
+    }
 
     await new Promise<void>((accept, reject) => {
       let ended = false;
@@ -92,23 +109,30 @@ export async function observeCompletion<T>(
         ended = true;
         clearTimeout(deadline);
         clearTimeout(poll);
-        if (error) reject(error); else accept();
+        if (error) reject(error);
+        else accept();
       };
-      const uncertain = (reason: string) => new CmsError(
-        "submission_uncertain",
-        "CMS submission completion could not be established. Inspect the record before another change; this action was not retried.",
-        { reason, pending_requests: pending.size },
+      const uncertain = (reason: string) =>
+        new CmsError(
+          "submission_uncertain",
+          "CMS submission completion could not be established. Inspect the record before another change; this action was not retried.",
+          { reason, pending_requests: pending.size },
+        );
+      const deadline = setTimeout(
+        () => finish(uncertain("completion_timeout")),
+        timeoutMs,
       );
-      const deadline = setTimeout(() => finish(uncertain("completion_timeout")), timeoutMs);
       const check = async () => {
         if (ended) return;
         try {
           if (page.isClosed()) return finish(uncertain("page_closed"));
           const url = new URL(page.url());
-          if (url.origin !== CMS_ORIGIN) return finish(uncertain("external_navigation"));
+          if (url.origin !== CMS_ORIGIN)
+            return finish(uncertain("external_navigation"));
           let expectedNavigation = false;
           if (options.expectedUrl && url.href !== startUrl) {
-            if (typeof options.expectedUrl === "string") expectedNavigation = url.href === options.expectedUrl;
+            if (typeof options.expectedUrl === "string")
+              expectedNavigation = url.href === options.expectedUrl;
             else {
               options.expectedUrl.lastIndex = 0;
               expectedNavigation = options.expectedUrl.test(url.href);
@@ -116,10 +140,19 @@ export async function observeCompletion<T>(
           }
           let formGone = false;
           for (const locator of initiallyVisible)
-            if (await disappeared(locator)) { formGone = true; break; }
+            if (await disappeared(locator)) {
+              formGone = true;
+              break;
+            }
           if (ended) return;
-          const evidence = actionFailed || failedWrite || completedWrites > 0 || formGone || expectedNavigation;
-          if (activity !== lastActivity || pending.size || !evidence) stableSince = undefined;
+          const evidence =
+            actionFailed ||
+            failedWrite ||
+            completedWrites > 0 ||
+            formGone ||
+            expectedNavigation;
+          if (activity !== lastActivity || pending.size || !evidence)
+            stableSince = undefined;
           lastActivity = activity;
           if (!pending.size && evidence) {
             stableSince ??= Date.now();
@@ -133,7 +166,10 @@ export async function observeCompletion<T>(
           // remains active; inspect the next document instead of assuming success.
           stableSince = undefined;
         }
-        if (!ended) poll = setTimeout(() => { void check(); }, 25);
+        if (!ended)
+          poll = setTimeout(() => {
+            void check();
+          }, 25);
       };
       void check();
     });

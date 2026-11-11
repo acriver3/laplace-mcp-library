@@ -15,7 +15,11 @@ import { createServer } from "../dist/server.js";
 function fixtureAdapter() {
   return {
     async identity() {
-      return { key: "private-session-secret", name: "Fixture Student", account_id: "student-1" };
+      return {
+        key: "private-session-secret",
+        name: "Fixture Student",
+        account_id: "student-1",
+      };
     },
     async read(input) {
       return {
@@ -34,7 +38,9 @@ function fixtureAdapter() {
         area: input.area,
         supported: true,
         url: "https://som-yale.12twenty.com/tasks/",
-        fields: [{ id: "subject", label: "Subject", type: "text", required: true }],
+        fields: [
+          { id: "subject", label: "Subject", type: "text", required: true },
+        ],
         actions: ["Save"],
         context: {},
       };
@@ -45,7 +51,11 @@ function fixtureAdapter() {
     async prepare(input) {
       return {
         identity: "private-session-secret",
-        preview: { account: "Fixture Student", operation: input.operation, fields: input.fields },
+        preview: {
+          account: "Fixture Student",
+          operation: input.operation,
+          fields: input.fields,
+        },
       };
     },
     async submit(input, recordEffect) {
@@ -117,33 +127,58 @@ test("MCP tool discovery covers every student area with explicit mutation bounda
     "cms_download_document",
   ])
     assert.ok(names.has(name), name);
-  assert.equal(tools.find((t) => t.name === "cms_commit_change").annotations.readOnlyHint, false);
-  assert.equal(tools.find((t) => t.name === "cms_commit_change").annotations.destructiveHint, true);
-  assert.equal(tools.find((t) => t.name === "cms_prepare_change").annotations.readOnlyHint, true);
   assert.equal(
-    tools.find((t) => t.name === "cms_prepare_change").annotations.idempotentHint,
+    tools.find((t) => t.name === "cms_commit_change").annotations.readOnlyHint,
     false,
   );
   assert.equal(
-    tools.find((t) => t.name === "cms_download_document").annotations.destructiveHint,
+    tools.find((t) => t.name === "cms_commit_change").annotations
+      .destructiveHint,
+    true,
+  );
+  assert.equal(
+    tools.find((t) => t.name === "cms_prepare_change").annotations.readOnlyHint,
+    true,
+  );
+  assert.equal(
+    tools.find((t) => t.name === "cms_prepare_change").annotations
+      .idempotentHint,
     false,
   );
   assert.equal(
-    tools.find((t) => t.name === "cms_download_document").annotations.readOnlyHint,
+    tools.find((t) => t.name === "cms_download_document").annotations
+      .destructiveHint,
+    false,
+  );
+  assert.equal(
+    tools.find((t) => t.name === "cms_download_document").annotations
+      .readOnlyHint,
     false,
   );
   for (const name of ["cms_session_status", "cms_get_dashboard"])
-    assert.deepEqual(tools.find((t) => t.name === name).inputSchema.properties, {});
+    assert.deepEqual(
+      tools.find((t) => t.name === name).inputSchema.properties,
+      {},
+    );
   assert.ok(tools.every((t) => t.inputSchema.type === "object"));
   assert.ok(tools.every((t) => t.inputSchema.additionalProperties === false));
 });
 test("setup checks expose account and dashboard data without session material", async (t) => {
   const { client } = await connected(t);
-  const status = await client.callTool({ name: "cms_session_status", arguments: {} });
+  const status = await client.callTool({
+    name: "cms_session_status",
+    arguments: {},
+  });
   assert.equal(status.structuredContent.result.account, "Fixture Student");
   assert.equal(status.structuredContent.result.authenticated, true);
-  assert.equal(JSON.stringify(status).includes("private-session-secret"), false);
-  const dashboard = await client.callTool({ name: "cms_get_dashboard", arguments: {} });
+  assert.equal(
+    JSON.stringify(status).includes("private-session-secret"),
+    false,
+  );
+  const dashboard = await client.callTool({
+    name: "cms_get_dashboard",
+    arguments: {},
+  });
   assert.equal(dashboard.structuredContent.result.area, "dashboard");
   assert.equal(dashboard.structuredContent.result.timezone, "America/New_York");
 });
@@ -167,9 +202,9 @@ test("domain read tools preserve filters, continuation and exact IDs", async (t)
   });
   const detail = await client.callTool({
     name: "cms_get_job",
-    arguments: { id: "35006705587971" },
+    arguments: { id: "12345678901" },
   });
-  assert.equal(detail.structuredContent.result.request.id, "35006705587971");
+  assert.equal(detail.structuredContent.result.request.id, "12345678901");
   assert.equal(detail.structuredContent.result.request.area, "jobs");
 });
 test("unknown operations, cross-area overrides and extra commit arguments are rejected", async (t) => {
@@ -184,13 +219,24 @@ test("unknown operations, cross-area overrides and extra commit arguments are re
     { name: "cms_get_job", arguments: {} },
     {
       name: "cms_get_form",
-      arguments: { operation: "evaluate_javascript", area: "profile", code: "alert(1)" },
+      arguments: {
+        operation: "evaluate_javascript",
+        area: "profile",
+        code: "alert(1)",
+      },
     },
     {
       name: "cms_prepare_change",
-      arguments: { operation: "request", area: "profile", url: "https://other.example" },
+      arguments: {
+        operation: "request",
+        area: "profile",
+        url: "https://other.example",
+      },
     },
-    { name: "cms_commit_change", arguments: { draft_id: "not-a-uuid", confirm: true } },
+    {
+      name: "cms_commit_change",
+      arguments: { draft_id: "not-a-uuid", confirm: true },
+    },
     {
       name: "cms_commit_change",
       arguments: {
@@ -209,7 +255,11 @@ test("MCP performs exact confirmed previews once and returns structured errors o
   const { client } = await connected(t);
   const p = await client.callTool({
     name: "cms_prepare_change",
-    arguments: { operation: "task_create", area: "tasks", fields: { subject: "Review jobs" } },
+    arguments: {
+      operation: "task_create",
+      area: "tasks",
+      fields: { subject: "Review jobs" },
+    },
   });
   assert.equal(p.isError, undefined);
   assert.equal(JSON.stringify(p).includes("private-session-secret"), false);
@@ -259,6 +309,9 @@ await server.connect(new StdioServerTransport());
   const { tools } = await client.listTools();
   assert.ok(tools.some((t) => t.name === "cms_get_dashboard"));
   assert.ok(tools.some((t) => t.name === "cms_commit_change"));
-  const status = await client.callTool({ name: "cms_session_status", arguments: {} });
+  const status = await client.callTool({
+    name: "cms_session_status",
+    arguments: {},
+  });
   assert.equal(status.isError, true);
 });
