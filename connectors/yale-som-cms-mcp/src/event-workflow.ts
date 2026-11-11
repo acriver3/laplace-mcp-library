@@ -40,13 +40,8 @@ export interface EventSubmission {
 }
 const prefix = (id: string) => "document:" + id + ":";
 const sourceMode = (value: unknown) =>
-  value === "Existing"
-    ? "existing"
-    : value === "Upload New"
-      ? "upload"
-      : String(value);
-const unsupported = (message: string) =>
-  new CmsError("action_unavailable", message);
+  value === "Existing" ? "existing" : value === "Upload New" ? "upload" : String(value);
+const unsupported = (message: string) => new CmsError("action_unavailable", message);
 
 async function state(page: Page) {
   const data = await page.evaluate(() => {
@@ -55,9 +50,7 @@ async function state(page: Page) {
       return {
         error: "CMS did not expose one native event registration form.",
       };
-    const c = (window as any).angular
-      ?.element(roots[0])
-      .controller("ttEditRegistration");
+    const c = (window as any).angular?.element(roots[0]).controller("ttEditRegistration");
     if (
       !c ||
       !c.isReady ||
@@ -68,21 +61,16 @@ async function state(page: Page) {
       return {
         error: "The native event registration controller is not ready.",
       };
-    const str = (v: unknown) =>
-      v === undefined || v === null ? "" : String(v);
+    const str = (v: unknown) => (v === undefined || v === null ? "" : String(v));
     const steps = c.enabledStepIds;
-    if (
-      JSON.stringify(steps) !== '["docs","confirm"]' &&
-      JSON.stringify(steps) !== '["confirm"]'
-    )
+    if (JSON.stringify(steps) !== '["docs","confirm"]' && JSON.stringify(steps) !== '["confirm"]')
       return {
         error:
           "This event requires an unreviewed step or survey. Complete it interactively in CMS.",
       };
     if (c.preSurveyMetadata || Object.keys(c.preSurveyResponse || {}).length)
       return {
-        error:
-          "This event includes survey metadata. Complete the survey interactively in CMS.",
+        error: "This event includes survey metadata. Complete the survey interactively in CMS.",
       };
     if (
       c.docsStepId !== "docs" ||
@@ -97,18 +85,15 @@ async function state(page: Page) {
       c.registrationId ||
       c.registration?.Id ||
       c.currentUser?.IsStudent !== true ||
-      str(c.currentUser?.Id) !== str(c.studentId)
+      str(c.currentUser?.Id) !== str(c.studentId) ||
+      String((window as any).TT?.CurrentSession?.CurrentUser?.Id) !== str(c.studentId) ||
+      (window as any).TT?.CurrentSession?.CurrentUser?.TypeId !== 2 ||
+      (window as any).TT?.Types?.UserType?.Student !== 2
     )
       return {
-        error:
-          "Only a new registration for the signed-in student is supported.",
+        error: "Only a new registration for the signed-in student is supported.",
       };
-    if (
-      c.coreEventId ||
-      c.coreScheduleId ||
-      c.coreTimeSlotId ||
-      c.coreScheduleTimeSlot
-    )
+    if (c.coreEventId || c.coreScheduleId || c.coreTimeSlotId || c.coreScheduleTimeSlot)
       return {
         error:
           "Core-event reservation and slot-locking workflows require interactive registration.",
@@ -118,14 +103,9 @@ async function state(page: Page) {
         error:
           "This event requires external registration instructions. Complete them interactively in CMS.",
       };
-    if (
-      c.isTimeSlotExpired ||
-      c.timeSlotRegistrationError ||
-      c.isRegistrationBeingSubmitted
-    )
+    if (c.isTimeSlotExpired || c.timeSlotRegistrationError || c.isRegistrationBeingSubmitted)
       return {
-        error:
-          "This registration is expired, unavailable, or already being submitted.",
+        error: "This registration is expired, unavailable, or already being submitted.",
       };
     const rules = c.event.RegistrationRules;
     if (
@@ -194,9 +174,7 @@ async function state(page: Page) {
           ? fs.AllowedExtensions.map(String)
           : [],
         max_bytes:
-          typeof fs.attachmentSizeLimitInBytes === "number"
-            ? fs.attachmentSizeLimitInBytes
-            : null,
+          typeof fs.attachmentSizeLimitInBytes === "number" ? fs.attachmentSizeLimitInBytes : null,
       });
     }
     if (
@@ -220,9 +198,7 @@ async function state(page: Page) {
   });
   if (data.error) throw unsupported(data.error);
   const route = new URL(page.url());
-  const match = route.hash.match(
-    /^#\/events\/(\d+)\/registration(?:\?([^#]*))?$/,
-  );
+  const match = route.hash.match(/^#\/events\/(\d+)\/registration(?:\?([^#]*))?$/);
   const params = new URLSearchParams(match?.[2]);
   if (
     route.origin !== CMS_ORIGIN ||
@@ -245,10 +221,7 @@ async function goToStep(page: Page, index: number) {
     const ng = (window as any).angular;
     const c = el && ng?.element(el).controller("ttEditRegistration");
     const source = c?.goToStep?.toString().replace(/\s+/g, "");
-    const pure =
-      /^function\(([A-Za-z_$][\w$]*)\)\{this\.stepIndex=\1;?\}$/.test(
-        source || "",
-      );
+    const pure = /^function\(([A-Za-z_$][\w$]*)\)\{this\.stepIndex=\1;?\}$/.test(source || "");
     const scope = el && ng?.element(el).isolateScope();
     if (
       !pure ||
@@ -262,9 +235,7 @@ async function goToStep(page: Page, index: number) {
     return c.stepIndex === index && c.currentStepId === c.enabledStepIds[index];
   }, index);
   if (!result)
-    throw unsupported(
-      "CMS step navigation no longer matches its reviewed local-only behavior.",
-    );
+    throw unsupported("CMS step navigation no longer matches its reviewed local-only behavior.");
 }
 async function documentScope(page: Page, id: string): Promise<Locator> {
   const nodes = page.locator("tt-edit-registration .registration-file");
@@ -272,19 +243,36 @@ async function documentScope(page: Page, id: string): Promise<Locator> {
   for (let i = 0; i < (await nodes.count()); i++) {
     if (
       await nodes.nth(i).evaluate((el, id) => {
-        const requirement = (window as any).angular
-          ?.element(el)
-          .scope()?.requirement;
+        const requirement = (window as any).angular?.element(el).scope()?.requirement;
         return String(requirement?.eventRegistrationDocumentTypeId) === id;
       }, id)
     )
       indexes.push(i);
   }
   if (indexes.length !== 1)
-    throw unsupported(
-      "CMS did not expose one exact event document requirement.",
+    throw unsupported("CMS did not expose one exact event document requirement.");
+  const matched = nodes.nth(indexes[0]);
+  await matched.evaluate((el, id) => el.setAttribute("data-laplace-event-document", id), id);
+  return page.locator('tt-edit-registration [data-laplace-event-document="' + id + '"]');
+}
+async function assertRequirement(scope: Locator, id: string) {
+  if (
+    (await scope.count()) !== 1 ||
+    !(await scope.evaluate((el, id) => {
+      const ng = (window as any).angular,
+        c = ng
+          ?.element(document.querySelector("tt-edit-registration"))
+          .controller("ttEditRegistration");
+      const d = ng?.element(el).scope()?.requirement;
+      return (
+        String(d?.eventRegistrationDocumentTypeId) === id && c?.registrationDocuments?.includes(d)
+      );
+    }, id))
+  )
+    throw new CmsError(
+      "record_changed",
+      "The exact event document requirement changed before editing.",
     );
-  return nodes.nth(indexes[0]);
 }
 async function one(scope: Locator, selector: string): Promise<Locator> {
   const node = scope.locator(selector);
@@ -300,30 +288,22 @@ const selectors = {
   file: 'input[type="file"][uploader="service"]',
 };
 async function inspectDocumentControls(page: Page, docs: EventDocument[]) {
-  if (
-    (await page.locator("tt-edit-registration .registration-file").count()) !==
-    docs.length
-  )
-    throw unsupported(
-      "The event document requirements no longer match their form controls.",
-    );
+  if ((await page.locator("tt-edit-registration .registration-file").count()) !== docs.length)
+    throw unsupported("The event document requirements no longer match their form controls.");
   for (const d of docs) {
     const scope = await documentScope(page, d.id);
     const matches = await scope.evaluate((el, d) => {
       const c = (window as any).angular
         .element(document.querySelector("tt-edit-registration"))
         .controller("ttEditRegistration");
-      const requirement = (window as any).angular
-        .element(el)
-        .scope().requirement;
+      const requirement = (window as any).angular.element(el).scope().requirement;
       const clean = (x: string) => x.replace(/\s+/g, " ").trim();
       return (
         c.registrationDocuments.filter(
           (x: any) => String(x.eventRegistrationDocumentTypeId) === d.id,
         ).length === 1 &&
         c.registrationDocuments.includes(requirement) &&
-        el.getAttribute("ng-repeat") ===
-          "requirement in $ctrl.registrationDocuments" &&
+        el.getAttribute("ng-repeat") === "requirement in $ctrl.registrationDocuments" &&
         clean(el.querySelector("h4")?.textContent || "") ===
           clean(d.title + (d.required ? " (required)" : " (optional)"))
       );
@@ -341,27 +321,20 @@ async function inspectDocumentControls(page: Page, docs: EventDocument[]) {
     );
     if (JSON.stringify(values) !== '["current","existing","upload"]')
       throw unsupported("The event document source choices have changed.");
-    const controls = await scope
-      .locator("input,select,textarea,[contenteditable=true]")
-      .count();
-    if (controls !== 7)
-      throw unsupported("The event document includes an unreviewed field.");
+    const controls = await scope.locator("input,select,textarea,[contenteditable=true]").count();
+    if (controls !== 7) throw unsupported("The event document includes an unreviewed field.");
   }
 }
 async function finalControl(page: Page) {
   const scope = page.locator("tt-edit-registration");
   if ((await inspectFields(scope)).length)
-    throw unsupported(
-      "The event confirmation includes unreviewed fields or consent.",
-    );
+    throw unsupported("The event confirmation includes unreviewed fields or consent.");
   const node = await one(scope, '[tt-click="$ctrl.save()"]');
   if (
     !(await node.isVisible()) ||
     !/^(Register|Join Waitlist)$/i.test((await node.innerText()).trim())
   )
-    throw unsupported(
-      "CMS did not expose the reviewed event registration confirmation.",
-    );
+    throw unsupported("CMS did not expose the reviewed event registration confirmation.");
   return node;
 }
 export async function inspectEventWorkflow(page: Page): Promise<EventWorkflow> {
@@ -381,9 +354,7 @@ export async function inspectEventWorkflow(page: Page): Promise<EventWorkflow> {
           value: d.type,
           options: [
             { value: "upload", label: "Upload New" },
-            ...(d.existing.length
-              ? [{ value: "existing", label: "Existing" }]
-              : []),
+            ...(d.existing.length ? [{ value: "existing", label: "Existing" }] : []),
           ],
         });
         fields.push({
@@ -402,8 +373,7 @@ export async function inspectEventWorkflow(page: Page): Promise<EventWorkflow> {
         });
         fields.push({
           id: p + "file",
-          label:
-            d.title + ": file (required when uploading this required document)",
+          label: d.title + ": file (required when uploading this required document)",
           type: "file",
           required: false,
         });
@@ -421,9 +391,7 @@ export async function inspectEventWorkflow(page: Page): Promise<EventWorkflow> {
     await goToStep(page, current.steps.indexOf("confirm"));
     await finalControl(page);
     const text = await page
-      .locator(
-        'tt-edit-registration [ng-if="$ctrl.currentStepId == $ctrl.confirmationStepId"]',
-      )
+      .locator('tt-edit-registration [ng-if="$ctrl.currentStepId == $ctrl.confirmationStepId"]')
       .innerText();
     return {
       event_id: current.event_id,
@@ -493,15 +461,11 @@ export function validateEventWorkflow(workflow: EventWorkflow, change: Change) {
         );
     } else if (mode === "upload") {
       if (Object.hasOwn(change.fields, p + "existing"))
-        throw new CmsError(
-          "invalid_field",
-          "An upload cannot also select an existing document.",
-        );
+        throw new CmsError("invalid_field", "An upload cannot also select an existing document.");
       if (
         (d.required ||
           Object.hasOwn(change.fields, p + "name") ||
-          (change.fields[p + "save_to_library"] ?? d.save_to_library) ===
-            true) &&
+          (change.fields[p + "save_to_library"] ?? d.save_to_library) === true) &&
         !file
       )
         throw new CmsError(
@@ -514,8 +478,7 @@ export function validateEventWorkflow(workflow: EventWorkflow, change: Change) {
         d.allowed_extensions.length &&
         !d.allowed_extensions.some(
           (extension) =>
-            "." + extension.replace(/^\\./, "").toLowerCase() ===
-            extname(file.path).toLowerCase(),
+            "." + extension.replace(/^\./, "").toLowerCase() === extname(file.path).toLowerCase(),
         )
       )
         throw new CmsError(
@@ -524,18 +487,10 @@ export function validateEventWorkflow(workflow: EventWorkflow, change: Change) {
           { field: p + "file", allowed_extensions: d.allowed_extensions },
         );
       if (file && !name)
-        throw new CmsError(
-          "required_field",
-          "Give the uploaded event document a name.",
-          {
-            field: p + "name",
-          },
-        );
-    } else
-      throw new CmsError(
-        "invalid_choice",
-        "Choose an observed event document source.",
-      );
+        throw new CmsError("required_field", "Give the uploaded event document a name.", {
+          field: p + "name",
+        });
+    } else throw new CmsError("invalid_choice", "Choose an observed event document source.");
   }
 }
 
@@ -547,9 +502,7 @@ export async function fillEventWorkflow(
   const workflow = await inspectEventWorkflow(page);
   validateEventWorkflow(workflow, change);
   for (const file of change.files) {
-    const d = workflow.documents.find(
-      (d) => file.field === prefix(d.id) + "file",
-    )!;
+    const d = workflow.documents.find((d) => file.field === prefix(d.id) + "file")!;
     const info = await stat(file.path);
     if (!info.isFile() || (d.max_bytes !== null && info.size > d.max_bytes))
       throw new CmsError(
@@ -584,28 +537,20 @@ export async function fillEventWorkflow(
         scope = await documentScope(page, d.id);
       const mode = sourceMode(change.fields[p + "type"] ?? d.type);
       const file = change.files.find((f) => f.field === p + "file");
-      const proposed = Object.keys(change.fields).filter((key) =>
-        key.startsWith(p),
-      );
+      const proposed = Object.keys(change.fields).filter((key) => key.startsWith(p));
       if (proposed.length) {
         const effect = await intend("event_document_fields:" + d.id);
+        await assertRequirement(scope, d.id);
         const radio = await one(
           scope,
           'input[type=radio][name="uploadType"][value="' + mode + '"]',
         );
         await radio.check();
         if (mode === "existing") {
-          const requested = String(
-            change.fields[p + "existing"] ?? d.existing_id,
-          );
-          const selected = d.existing.filter(
-            (x) => x.id === requested || x.name === requested,
-          );
+          const requested = String(change.fields[p + "existing"] ?? d.existing_id);
+          const selected = d.existing.filter((x) => x.id === requested || x.name === requested);
           if (selected.length !== 1)
-            throw new CmsError(
-              "invalid_choice",
-              "The existing event document is ambiguous.",
-            );
+            throw new CmsError("invalid_choice", "The existing event document is ambiguous.");
           const select = await one(scope, selectors.existing);
           const matches = await select
             .locator("option")
@@ -624,9 +569,7 @@ export async function fillEventWorkflow(
           await select.selectOption(matches[0]);
         } else {
           if (Object.hasOwn(change.fields, p + "name"))
-            await (
-              await one(scope, selectors.name)
-            ).fill(String(change.fields[p + "name"]));
+            await (await one(scope, selectors.name)).fill(String(change.fields[p + "name"]));
           if (Object.hasOwn(change.fields, p + "save_to_library"))
             await (
               await one(scope, selectors.library)
@@ -648,20 +591,13 @@ export async function fillEventWorkflow(
           {
             mode,
             name: mode === "upload" ? change.fields[p + "name"] : undefined,
-            library:
-              mode === "upload"
-                ? change.fields[p + "save_to_library"]
-                : undefined,
+            library: mode === "upload" ? change.fields[p + "save_to_library"] : undefined,
             existing:
               mode === "existing"
                 ? d.existing.find(
                     (x) =>
-                      x.id ===
-                        String(
-                          change.fields[p + "existing"] ?? d.existing_id,
-                        ) ||
-                      x.name ===
-                        String(change.fields[p + "existing"] ?? d.existing_id),
+                      x.id === String(change.fields[p + "existing"] ?? d.existing_id) ||
+                      x.name === String(change.fields[p + "existing"] ?? d.existing_id),
                   )?.id
                 : undefined,
           },
@@ -677,7 +613,23 @@ export async function fillEventWorkflow(
         const effect = await intend("event_document_upload:" + d.id, {
           document_type_id: d.id,
         });
-        await (await one(scope, selectors.file)).setInputFiles(file.path);
+        await assertRequirement(scope, d.id);
+        const input = await (await one(scope, selectors.file)).elementHandle();
+        if (
+          !input ||
+          !(await input.evaluate((el, id) => {
+            const row = el.closest(".registration-file");
+            const d = row && (window as any).angular.element(row).scope()?.requirement;
+            return (
+              String(d?.eventRegistrationDocumentTypeId) === id &&
+              !d.fileService.hasFiles() &&
+              !d.fileService.isUploading &&
+              !d.fileService.hasError()
+            );
+          }, d.id))
+        )
+          throw new CmsError("record_changed", "The exact event upload control changed.");
+        await input.setInputFiles(file.path);
         try {
           await page.waitForFunction(
             (id) => {
@@ -691,10 +643,7 @@ export async function fillEventWorkflow(
               return (
                 !fs ||
                 fs.hasError() ||
-                (!fs.isUploading &&
-                  fs.hasFiles() &&
-                  fs.files.length === 1 &&
-                  !!fs.files[0]?.FileId)
+                (!fs.isUploading && fs.hasFiles() && fs.files.length === 1 && !!fs.files[0]?.FileId)
               );
             },
             d.id,
@@ -726,10 +675,7 @@ export async function fillEventWorkflow(
         await verified(effect, { uploaded_file_id: fileId });
       }
     }
-    const next = await one(
-      page.locator("tt-edit-registration"),
-      '[ng-click="$ctrl.continue()"]',
-    );
+    const next = await one(page.locator("tt-edit-registration"), '[ng-click="$ctrl.continue()"]');
     const pure = await next.evaluate((el) => {
       const c = (window as any).angular
         .element(document.querySelector("tt-edit-registration"))
@@ -738,11 +684,7 @@ export async function fillEventWorkflow(
         c.continue.toString().replace(/\s+/g, ""),
       );
     });
-    if (
-      !pure ||
-      (await next.isDisabled()) ||
-      (await next.getAttribute("disabled")) !== null
-    )
+    if (!pure || (await next.isDisabled()) || (await next.getAttribute("disabled")) !== null)
       throw new CmsError(
         "required_field",
         "CMS has not accepted all event documents for continuation.",
@@ -750,14 +692,8 @@ export async function fillEventWorkflow(
     await next.evaluate((e) => (e as HTMLElement).click());
   } else await goToStep(page, 0);
   const final = await finalControl(page);
-  if (
-    (await final.isDisabled()) ||
-    (await final.getAttribute("disabled")) !== null
-  )
-    throw new CmsError(
-      "action_unavailable",
-      "CMS has disabled this event registration.",
-    );
+  if ((await final.isDisabled()) || (await final.getAttribute("disabled")) !== null)
+    throw new CmsError("action_unavailable", "CMS has disabled this event registration.");
   const expected = {
     event_id: workflow.event_id,
     slot_id: workflow.slot_id,
@@ -773,14 +709,9 @@ export async function fillEventWorkflow(
         core_type: d.core_type,
         mode,
         name: String(change.fields[p + "name"] ?? d.name),
-        library:
-          (change.fields[p + "save_to_library"] ?? d.save_to_library) === true,
-        existing:
-          d.existing.find((x) => x.id === wanted || x.name === wanted)?.id ||
-          "",
-        file_id:
-          uploads.find((x) => x.document_type_id === d.id)?.uploaded_file_id ||
-          "",
+        library: (change.fields[p + "save_to_library"] ?? d.save_to_library) === true,
+        existing: d.existing.find((x) => x.id === wanted || x.name === wanted)?.id || "",
+        file_id: uploads.find((x) => x.document_type_id === d.id)?.uploaded_file_id || "",
       };
     }),
   };
@@ -788,11 +719,8 @@ export async function fillEventWorkflow(
     page.evaluate(
       ({ expected, submit }) => {
         const host = document.querySelector("tt-edit-registration");
-        const c = (window as any).angular
-          ?.element(host)
-          .controller("ttEditRegistration");
-        const str = (v: unknown) =>
-          v === undefined || v === null ? "" : String(v);
+        const c = (window as any).angular?.element(host).controller("ttEditRegistration");
+        const str = (v: unknown) => (v === undefined || v === null ? "" : String(v));
         const rules = c?.event?.RegistrationRules;
         if (
           !c ||
@@ -813,9 +741,11 @@ export async function fillEventWorkflow(
           c.coreTimeSlotId ||
           c.currentUser?.IsStudent !== true ||
           str(c.studentId) !== str(c.currentUser.Id) ||
+          String((window as any).TT?.CurrentSession?.CurrentUser?.Id) !== str(c.studentId) ||
+          (window as any).TT?.CurrentSession?.CurrentUser?.TypeId !== 2 ||
+          (window as any).TT?.Types?.UserType?.Student !== 2 ||
           !rules ||
-          (rules.CanRegister !== true &&
-            rules.CanRegisterForWaitlist !== true) ||
+          (rules.CanRegister !== true && rules.CanRegisterForWaitlist !== true) ||
           rules.IsAttending ||
           rules.IsOnWaitlist ||
           c.event.IsAttending === true ||
@@ -863,9 +793,7 @@ export async function fillEventWorkflow(
               return false;
           }
         }
-        const controls = host!.querySelectorAll<HTMLElement>(
-          '[tt-click="$ctrl.save()"]',
-        );
+        const controls = host!.querySelectorAll<HTMLElement>('[tt-click="$ctrl.save()"]');
         if (
           controls.length !== 1 ||
           !controls[0].getClientRects().length ||

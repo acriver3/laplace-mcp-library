@@ -75,6 +75,10 @@ export function installEventForm(options) {
       (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
     );
   window.events = [];
+  window.TT = {
+    CurrentSession: { CurrentUser: { Id: 7, TypeId: 2 } },
+    Types: { UserType: { Student: 2 } },
+  };
   window.controller = c;
   const render = () => {
     if (c.currentStepId === "docs") {

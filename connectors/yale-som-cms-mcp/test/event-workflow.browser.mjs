@@ -131,6 +131,10 @@ async function fixture(t, options = {}) {
           })[c],
       );
     window.events = [];
+    window.TT = {
+      CurrentSession: { CurrentUser: { Id: 7, TypeId: 2 } },
+      Types: { UserType: { Student: 2 } },
+    };
     window.controller = c;
     const render = () => {
       if (c.currentStepId === "docs") {
@@ -626,6 +630,83 @@ test("controller and URL slot mismatch is unavailable before inspection changes"
   const page = await fixture(t, { slot: "88" });
   await page.evaluate(() => {
     window.controller.timeSlotId = "89";
+  });
+  await rejects(inspectEventWorkflow(page), "action_unavailable");
+  assert.deepEqual(await page.evaluate(() => window.events), []);
+});
+
+test("event document row reordering during journaling retains exact upload requirement binding", async (t) => {
+  const page = await fixture(t, {
+    docs: [
+      { id: "101", title: "Resume", required: true },
+      { id: "102", title: "Cover Letter", required: true },
+    ],
+  });
+  let reordered = false;
+  const record = recorder(page, [], async (effect) => {
+    if (!reordered && effect.name === "event_document_upload:101" && effect.status === "intended") {
+      reordered = true;
+      await page.evaluate(() => {
+        const row = document.querySelector('[data-laplace-event-document="101"]');
+        const other = [...document.querySelectorAll(".registration-file")].find(
+          (el) => el.requirement.eventRegistrationDocumentTypeId === 102,
+        );
+        other.querySelector("input[type=file]").addEventListener("change", () => {
+          const first = window.controller.registrationDocuments[0];
+          if (!first.fileService.hasFiles()) first.fileService.error = true;
+        });
+        row.parentElement.append(row);
+      });
+    }
+  });
+  const result = await fillEventWorkflow(
+    page,
+    change({
+      files: [
+        { field: "document:101:file", path: file },
+        { field: "document:102:file", path: file },
+      ],
+    }),
+    record,
+  );
+  assert.deepEqual(result.uploads, [
+    { document_type_id: "101", uploaded_file_id: "file-101" },
+    { document_type_id: "102", uploaded_file_id: "file-102" },
+  ]);
+});
+
+test("changed event requirement scope cannot upload into another document", async (t) => {
+  const page = await fixture(t, {
+    docs: [
+      { id: "101", title: "Resume", required: true },
+      { id: "102", title: "Cover Letter", required: false },
+    ],
+  });
+  const record = recorder(page, [], async (effect) => {
+    if (effect.name === "event_document_upload:101")
+      await page.evaluate(() => {
+        document.querySelector('[data-laplace-event-document="101"]').requirement =
+          window.controller.registrationDocuments[1];
+      });
+  });
+  await rejects(
+    fillEventWorkflow(
+      page,
+      change({ files: [{ field: "document:101:file", path: file }] }),
+      record,
+    ),
+    "record_changed",
+  );
+  assert.equal(
+    (await page.evaluate(() => window.events)).some((x) => x.startsWith("upload:")),
+    false,
+  );
+});
+
+test("raw session student mismatch is rejected before any event field changes", async (t) => {
+  const page = await fixture(t);
+  await page.evaluate(() => {
+    window.TT.CurrentSession.CurrentUser.Id = 8;
   });
   await rejects(inspectEventWorkflow(page), "action_unavailable");
   assert.deepEqual(await page.evaluate(() => window.events), []);
