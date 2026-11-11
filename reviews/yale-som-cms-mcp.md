@@ -46,16 +46,18 @@ login arguments, allowed setup tools, rejection of other calls and inputs,
 and disabled state after failed authentication. It does not use a Yale
 account or the real CMS browser adapter.
 
-Hosted library integration passed its prescribed full local validation and
-build plan against the fixed web base
-`69e66a389fefe8c6a125f15b583547d386aceaf5`. This included protocol synchronization,
-unit tests, contract checks, type checks and local marketing, connector and
-gateway builds. The full plan passed for web commit
-`71e937f76f2b02f61bca9430629f3539a5e9d279`; later catalog prose and Desktop fixture
-pin updates passed their affected tests and protocol synchronization. The
-current reviewed web integration commit is
-`8fef5904cb13cf2e299b117d1cfce4c037bd734c`, which pins Desktop
-`896ba071649ece404238761894d542de9fcb1978`.
+Hosted library integration was rebased onto the latest reviewed web main,
+`0b97d3b2a5b1567da67ea5e26f80ddfa284f98ce`, which added public documentation and
+shared documentation MCP content. The four CMS commits rebased without
+conflicts or patch changes. The prescribed full local validation and build
+plan passed at web commit `0d443d7bbe6840ceacc7ab5f74659256837d5811`, using that
+fixed base. This included documentation drift, protocol synchronization,
+formatting, lint, type checks, contract checks, full selected unit suites and
+local marketing, connector and gateway builds. The connector suite passed 576
+tests; the shared protocol suite passed 75; the WSL Desktop suite passed 474
+with one platform skip. The full log is retained locally at
+`/tmp/yale-cms-web-rebase-verify.log`. The reviewed web integration pins Desktop
+`896ba071649ece404238761894d542de9fcb1978`. No push or deployment was performed.
 
 For the connector package, the coordinating implementation agent reported a
 successful native Windows unit run with 53 tests: 52 passed and one platform
