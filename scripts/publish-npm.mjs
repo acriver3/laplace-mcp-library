@@ -36,6 +36,7 @@ const connectors = {
 	"msoutlook-mcp": { build: ["build"], test: true, workspaces: true },
 	"canvas-session-mcp": { build: [], test: true, workspaces: false },
 	"yale-som-ems-mcp": { build: ["build"], test: true, workspaces: true },
+	"yale-som-cms-mcp": { build: ["build"], test: true, workspaces: true },
 	"linkedin-mcp-server": { build: [], test: true, workspaces: false },
 	"slack-mcp-server": {
 		build: [],
