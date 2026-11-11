@@ -71,7 +71,7 @@ export async function extractReadFields(page: Page, scope = MAIN): Promise<FormF
   });
 }
 
-type Snapshot = { title:string; text:string; links:{name:string;url:string;text:string;cells:string[];favorite?:boolean}[]; tableRows:{text:string;cells:string[]}[]; models:JsonRecord[]; filters:JsonRecord[]; total?:number; headings:string[]; };
+type Snapshot = { title:string; text:string; links:{name:string;url:string;text:string;cells:string[];favorite?:boolean}[]; tableRows:{text:string;cells:string[]}[]; models:JsonRecord[]; filters:JsonRecord[]; total?:number; headings:string[]; context:JsonRecord; };
 type Cursor = { account:string; request:string; offset:number; expires:number; };
 
 export class CmsReads {
@@ -126,6 +126,12 @@ export class CmsReads {
       await tab.evaluate(e=>(e as HTMLElement).click());
       await this.settled(page);
     }
+    if(id&&['tasks','targets','activity','documents'].includes(area)){
+      let found=false;
+      for(let attempt=0;attempt<20;attempt++){const items=this.records(area,await this.snapshot(page));if(items.some(r=>r.id===id)){found=true;break;}if(!await this.more(page))break;}
+      if(!found)throw new CmsError('record_not_found','This record is not exposed by the current account and active filters.',{area,id});
+      if(area==='activity'){await page.evaluate(id=>{const e=[...document.querySelectorAll('.activity-stream-card')].find(e=>String((window as any).ko?.dataFor(e)?.Id?.())===id);const m=e&&(window as any).ko.dataFor(e);if(m?.showViewMore?.()&&typeof m.toggle==='function')m.toggle();},id);await this.settled(page);}
+    }
     return page;
   }
 
@@ -153,8 +159,10 @@ export class CmsReads {
       throw new CmsError('permission_denied','This CMS page is not available to the authenticated account.');
   }
 
-  private async snapshot(page: Page): Promise<Snapshot> {
-    return page.locator(MAIN).first().evaluate(root => {
+  private async snapshot(page: Page, detail = false, area?:Area): Promise<Snapshot> {
+    const dialogs=page.locator('[role=dialog],.modal-dialog,.slideout').filter({visible:true});
+    const target=area==='saved_searches'?page.locator('tt-saved-search').first():detail&&await dialogs.count()?dialogs.last():page.locator(MAIN).first();
+    return target.evaluate(root => {
       const norm = (x:string) => x.replace(/\s+/g,' ').trim();
       const visible = (e:Element) => !!(e as HTMLElement).getBoundingClientRect().width && !e.closest('[hidden],.ng-hide');
       const allLinks = [...root.querySelectorAll<HTMLAnchorElement>('a[href]')].filter(visible).map(a=>{
@@ -166,7 +174,7 @@ export class CmsReads {
       const angular = (window as any).angular;
       const models:JsonRecord[] = [];
       const seen = new Set<string>();
-      const fields = ['Id','EntityId','TypeId','Name','Title','Subject','Description','Status','StatusId','JobStatus','ApplicationStatus','RegistrationStatus','ApprovalStatus','CompanyId','CompanyName','ContactId','ContactName','AdviserId','AdviserName','StudentId','StartTime','EndTime','start','end','Location','DueDate','Date','Email','EmailAddress','Phone','JobTitle','IsFavorite','IsRegistered','IsApplied','IsForOfficeHours','HasMaxAppointmentsReached','ApplicationDocumentTypeId','FileId','FileName','Url','Priority','PriorityId','Comments','InterviewDate','ApplicationDeadline','CreatedDate','UpdatedDate','ActivityDate','NoteTypeName','CanEdit','CanDelete','AcademicYearId','IsWithdrawn','IsApproved','DidAttend','IsNoShow'];
+      const fields = ['Id','EntityId','TypeId','Name','Title','Subject','Description','Status','StatusId','JobStatus','ApplicationStatus','RegistrationStatus','ApprovalStatus','CompanyId','CompanyName','ContactId','ContactName','AdviserId','AdviserName','StartTime','EndTime','start','end','Location','DueDate','Date','Email','EmailAddress','Phone','JobTitle','IsFavorite','IsRegistered','IsApplied','IsForOfficeHours','HasMaxAppointmentsReached','ApplicationDocumentTypeId','FileId','FileName','Url','Priority','PriorityId','Comments','InterviewDate','ApplicationDeadline','CreatedDate','UpdatedDate','TimeSlotId','EventTimeSlotId','ScheduleId','EventId','slotStatus','canRegisterForTimeslot','canCancelRegistration','IsAttending','IsOnWaitlist','IsTimeSlotEvent','IsUpcoming','RegistrationBeginDate','RegistrationEndDate','IsFull','IsAvailable','IsRegistered','MaxAttendees','NumRegistrations','RegistrationCount','Capacity','ActivityDate','NoteTypeName','CanEdit','CanDelete','AcademicYearId','IsWithdrawn','IsApproved','DidAttend','IsNoShow'];
       const collect = (values:any,source:string) => {
         const items = Array.isArray(values)?values:values?.Items || values?.Results;
         if (!Array.isArray(items)) return;
@@ -181,22 +189,27 @@ export class CmsReads {
           models.push(result);
         }
       };
-      if(angular) for(const element of root.querySelectorAll('*')) {
+      if(angular) for(const element of [root,...root.querySelectorAll('*')]) {
         const tag=element.tagName.toLowerCase();
         if(!tag.startsWith('tt-'))continue;
         const name=tag.replace(/-([a-z])/g,(_,c)=>c.toUpperCase());
         const ctrl=angular.element(element).controller(name); if(!ctrl)continue;
-        for(const key of ['calendarEvents','appointmentCalendarEvents','tasks','jobPostings','allApplicationDocuments','applicationDocuments','companyPagedList','contactPagedList','pagedResult','pagedList','resumeBooks','items','resources','jobs','educations']) collect(ctrl[key],tag);
+        for(const key of ['calendarEvents','appointmentCalendarEvents','tasks','jobPostings','allApplicationDocuments','applicationDocuments','companyPagedList','contactPagedList','pagedResult','pagedList','resumeBooks','items','resources','jobs','educations','timeSlots','studentTimeSlots']) collect(ctrl[key],tag);
+        if(tag==='tt-saved-search')for(const group of ctrl.savedSearchGroups||[])collect(group.savedSearches,'saved_search');
         for(const key of ['event','jobPosting','company','contact','task','applicationDocument']) if(ctrl[key])collect([ctrl[key]],tag);
       }
       const ko=(window as any).ko;
       if(ko)for(const card of root.querySelectorAll('.activity-stream-card')){const model=ko.dataFor(card);if(!model)continue;const values:JsonRecord={};for(const key of fields){const v=model[key];values[key]=typeof v==='function'?v():v;}collect([values],'activity-stream-card');}
+      const context:JsonRecord={};
+      const safe=(value:any,depth=0):any=>{if(value===null||['string','number','boolean'].includes(typeof value))return value;if(depth>5)return undefined;if(Array.isArray(value))return value.slice(0,100).map(v=>safe(v,depth+1));if(typeof value!=='object')return undefined;return Object.fromEntries(Object.entries(value).filter(([k])=>!k.startsWith('$')&&!/token|secret|cookie|password|csrf|passport|session|^Student(?:Id|Name|Email)$/i.test(k)).slice(0,200).map(([k,v])=>[k,safe(v,depth+1)]).filter(([,v])=>v!==undefined));};
+      if(angular){for(const [tag,keys]of [['tt-event-detail',['studentRegistration','studentTimeSlots','studentRegistrationLabel','scheduleDates']],['tt-time-slot-list',['eventId','currentUserTimeSlot','canCancelRegistration','canSwapTimeSlot']],['tt-job-posting-detail',['studentApplication','application','studentRegistration','applicationStatus']],['tt-calendar',['view']]] as const){const e=document.querySelector(tag);if(!e)continue;const c=angular.element(e).controller(tag.replace(/-([a-z])/g,(_,v)=>v.toUpperCase()));if(!c)continue;context[tag]=Object.fromEntries(keys.filter(k=>c[k]!==undefined).map(k=>[k,safe(c[k])]));}}
+      if(angular){const e=document.querySelector('tt-event-detail');const c=e&&angular.element(e).controller('ttEventDetail');if(c?.event){const event=c.event;const slots=document.querySelector('tt-time-slot-list');const sc=slots&&angular.element(slots).controller('ttTimeSlotList');const own=sc?.currentUserTimeSlot;const slotKeys=['Id','EventTimeSlotId','EventId','ScheduleId','StartTime','EndTime','slotStatus','canRegisterForTimeslot','canCancelRegistration'];context.registration_state={event_id:event.Id,is_attending:event.IsAttending,rules:safe(event.RegistrationRules),label:c.studentRegistrationLabel,current_slot:own?Object.fromEntries(slotKeys.filter(k=>own[k]!==undefined).map(k=>[k,safe(own[k])])):null};}}
       const filterElement=root.querySelector('tt-filter');
       const filter=filterElement&&angular?.element(filterElement).controller('ttFilter');
       const filters=(filter?.availableFilters||[]).map((f:any)=>({id:f.PropertyName||f.AttributeName||f.DisplayName,label:f.DisplayName,type:f.FieldTypeId||f.TypeId,lookup_id:f.LookupId,custom_filter_type_id:f.CustomFilterTypeId}));
       const text=(root as HTMLElement).innerText;
       const totalMatch=text.match(/Results:\s*([\d,]+)/i);
-      return {title:document.title,text,links:allLinks,tableRows,models,filters,total:totalMatch?Number(totalMatch[1].replaceAll(',','')):undefined,headings:[...root.querySelectorAll('h1,h2,h3,h4')].filter(visible).map(x=>norm(x.textContent||''))};
+      return {title:document.title,text,links:allLinks,tableRows,models,filters,context,total:totalMatch?Number(totalMatch[1].replaceAll(',','')):undefined,headings:[...root.querySelectorAll('h1,h2,h3,h4')].filter(visible).map(x=>norm(x.textContent||''))};
     });
   }
 
@@ -214,26 +227,28 @@ export class CmsReads {
   private records(area: Area, snap: Snapshot, detailId?:string): CmsRecord[] {
     const found=new Map<string,CmsRecord>();
     for(const link of snap.links){
-      if(area==='activity')continue;
+      if(area==='activity'||area==='saved_searches')continue;
       let url:URL;try{url=sameOrigin(link.url);}catch{continue;}
       const id=this.recordId(url.href);if(!id)continue;
       const normalized={id,name:link.name,url:url.href,text:link.text,columns:link.cells,...(link.favorite!==undefined?{favorite:link.favorite}:{})};
       found.set(id,normalized);this.knownLinks.set(`${area}:${id}`,{url:url.href,name:link.name});
     }
     for(const model of snap.models){
+      if(area==='saved_searches'&&model._source!=='saved_search')continue;
       const id=String(model.EntityId||model.Id);
       if(!id||id==='undefined')continue;
       const existing=found.get(id);
-      const name=String(model.Name||model.Title||model.Subject||model.AdviserName||model.CompanyName||model.ContactName||existing?.name||`${area} ${id}`);
+      const name=String(model.Name||model.Title||model.Subject||model.AdviserName||model.CompanyName||model.ContactName||existing?.name||(model._source==='tt-time-slot-list'?`${model.StartTime} – ${model.EndTime}`:`${area} ${id}`));
+      if(model._source==='tt-time-slot-list'&&typeof model.StartTime==='string'){model.start=/Z$|[+-]\d\d:\d\d$/.test(model.StartTime)?model.StartTime:model.StartTime+'Z';if(typeof model.EndTime==='string')model.end=/Z$|[+-]\d\d:\d\d$/.test(model.EndTime)?model.EndTime:model.EndTime+'Z';}
       const data=Object.fromEntries(Object.entries(model).filter(([key])=>!key.startsWith('_')));
-      found.set(id,{...existing,id,name,...data,...(model.start?{start:model.start,end:model.end,timezone:TIMEZONE}:{}),...(area==='appointments'?{slot_id:id}:{}),source_component:model._source});
+      found.set(id,{...existing,id,name,...data,...(model.start?{start:model.start,end:model.end,timezone:TIMEZONE}:{}),...(area==='appointments'||model._source==='tt-time-slot-list'?{slot_id:id}:{}),...(model._source==='tt-time-slot-list'?{kind:'event_slot'}:{}),source_component:model._source});
     }
     if(!found.size && snap.tableRows.length)for(const row of snap.tableRows){
       if(/^(no |there are no)/i.test(row.text))continue;
       const id=`row:${digest(row.cells).slice(0,20)}`;
       found.set(id,{id,name:row.cells[0]||row.text,columns:row.cells,text:row.text,read_only_summary:true});
     }
-    if(detailId && ['jobs','applications','events','employers','contacts','resume_books','resources'].includes(area) && !found.has(detailId)) found.set(detailId,{id:detailId,name:snap.headings[0]||snap.title,text:snap.text});
+    if(detailId && ['jobs','applications','events','employers','contacts','resume_books','resources','appointments'].includes(area) && !found.has(detailId)) found.set(detailId,{id:detailId,name:snap.headings[0]||snap.title,text:snap.text});
     for(const record of found.values())this.knownRecords.set(`${area}:${record.id}`,record);
     return [...found.values()];
   }
@@ -317,13 +332,14 @@ export class CmsReads {
     let offset=0;
     if(input.cursor){const state=this.cursors.get(input.cursor);if(!state||state.expires<Date.now()||state.account!==identity.key||state.request!==signature)throw new CmsError('invalid_cursor','This continuation expired or belongs to another account/query. Start a fresh read.');offset=state.offset;}
     await this.applyFilters(page,input);
-    let snap=await this.snapshot(page);
+    let snap=await this.snapshot(page,!!input.id,input.area);
     let records=this.records(input.area,snap,input.id);
     const collected=new Map(records.map(r=>[r.id,r]));
     let loadedMore=0;
-    while(collected.size<offset+input.limit+1 && !input.id && loadedMore<20){
+    const inRange=(r:CmsRecord)=>!r.start||(!input.start||Date.parse(String(r.start))>=Date.parse(input.start))&&(!input.end||Date.parse(String(r.start))<Date.parse(input.end));
+    while([...collected.values()].filter(inRange).length<offset+input.limit+1 && !input.id && loadedMore<20){
       if(!await this.more(page,input.end))break;
-      loadedMore++;snap=await this.snapshot(page);records=this.records(input.area,snap);for(const record of records)collected.set(record.id,record);
+      loadedMore++;snap=await this.snapshot(page,false,input.area);records=this.records(input.area,snap);for(const record of records)collected.set(record.id,record);
     }
     records=[...collected.values()];
     if(input.id&&!['jobs','applications','events','employers','contacts','resume_books','resources','appointments'].includes(input.area)){
@@ -331,7 +347,7 @@ export class CmsReads {
       if(!match)throw new CmsError('record_not_found','The requested record is not present in this account view.',{area:input.area,id:input.id});
       records=[match];offset=0;
     }
-    if(input.start||input.end)records=records.filter(r=>!r.start || (!input.start||Date.parse(String(r.start))>=Date.parse(input.start))&&(!input.end||Date.parse(String(r.start))<Date.parse(input.end)));
+    if(input.start||input.end)records=records.filter(inRange);
     const availableMore=records.length>offset+input.limit || (!!snap.total&&snap.total>records.length) || loadedMore===20;
     let cursor:string|undefined;
     if(availableMore){cursor=randomUUID();this.cursors.set(cursor,{account:identity.key,request:signature,offset:offset+input.limit,expires:Date.now()+600_000});}
@@ -339,7 +355,7 @@ export class CmsReads {
     const selected=records.slice(offset,offset+input.limit);
     const text=input.id||!records.length?snap.text.slice(0,60000):selected.map(r=>String(r.text||r.name)).join('\n\n').slice(0,60000);
     return {area:input.area,url:page.url(),title:snap.title,timezone:TIMEZONE,text,records:selected,fields:await extractReadFields(page),filters:snap.filters,
-      headings:snap.headings,total:snap.total,loaded_records:records.length,...(cursor?{next_cursor:cursor,truncated:true}:{}),
+      headings:snap.headings,context:snap.context,...(snap.context.registration_state?{registration_state:snap.context.registration_state}:{}),total:snap.total,loaded_records:records.length,...(cursor?{next_cursor:cursor,truncated:true}:{}),
       ...(input.area==='interviews'?{view_description:'My Interview Availability and personal calendar; job-specific interview status is shown under applications.'}:{}),
       ...(input.area==='saved_searches'?{view_description:`Saved search menu for ${input.view||'jobs'}`}:{})};
   }
