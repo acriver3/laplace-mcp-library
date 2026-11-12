@@ -1,7 +1,9 @@
+import { createRequire } from "node:module";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { EmsService, validateSearch } from "./core.js";
 import { EmsError, changeSchema, errorResult, idSchema, searchSchema, } from "./types.js";
+const { version } = createRequire(import.meta.url)("../package.json");
 export function backgroundInterval(env = process.env) {
     const minutes = Number(env.EMS_VERIFIED_CHECK_MINUTES);
     return env.LAPLACE_BACKGROUND_SESSION_CHECKS === "on" && [15, 30, 60].includes(minutes)
@@ -9,7 +11,7 @@ export function backgroundInterval(env = process.env) {
 }
 const requiresSignIn = (error) => error instanceof EmsError && ["auth_required", "identity_mismatch"].includes(error.code);
 export function createServer(adapter, service = new EmsService(adapter), interval = 0) {
-    const server = new McpServer({ name: "yale-som-ems-mcp", version: "0.1.2" }, {
+    const server = new McpServer({ name: "yale-som-ems-mcp", version }, {
         instructions: "Use Yale SOM student EMS templates only. Show the complete ems_prepare_change preview and obtain the user's confirmation before ems_commit_change. A confirm flag is a caller attestation, not proof of human approval; retain your MCP client's approval controls. Never automatically replay a write. Pending requests are not confirmed bookings. Interview rooms may require check-in at the physical room pad; this server does not check in.",
     });
     let pending = 0;
