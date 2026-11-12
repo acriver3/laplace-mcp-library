@@ -2,10 +2,56 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { EmsService, validateSearch } from "./core.js";
 import { EmsError, changeSchema, errorResult, idSchema, searchSchema, } from "./types.js";
-export function createServer(adapter, service = new EmsService(adapter)) {
+export function backgroundInterval(env = process.env) {
+    const minutes = Number(env.EMS_VERIFIED_CHECK_MINUTES);
+    return env.LAPLACE_BACKGROUND_SESSION_CHECKS === "on" && [15, 30, 60].includes(minutes)
+        ? minutes * 60_000 : 0;
+}
+const requiresSignIn = (error) => error instanceof EmsError && ["auth_required", "identity_mismatch"].includes(error.code);
+export function createServer(adapter, service = new EmsService(adapter), interval = 0) {
     const server = new McpServer({ name: "yale-som-ems-mcp", version: "0.1.2" }, {
         instructions: "Use Yale SOM student EMS templates only. Show the complete ems_prepare_change preview and obtain the user's confirmation before ems_commit_change. A confirm flag is a caller attestation, not proof of human approval; retain your MCP client's approval controls. Never automatically replay a write. Pending requests are not confirmed bookings. Interview rooms may require check-in at the physical room pad; this server does not check in.",
     });
+    let pending = 0;
+    let stopped = false;
+    let timer;
+    let lastRateLimit = 0;
+    const schedule = () => {
+        clearTimeout(timer);
+        if (stopped || !interval || pending || !adapter.checkSession)
+            return;
+        const delay = Math.max(interval, lastRateLimit - Date.now());
+        timer = setTimeout(() => {
+            void service.queue.run(async () => {
+                if (pending || stopped)
+                    return;
+                try {
+                    if (Date.now() >= lastRateLimit)
+                        await adapter.checkSession();
+                }
+                catch (error) {
+                    if (requiresSignIn(error)) {
+                        service.invalidateDrafts();
+                        return;
+                    }
+                    lastRateLimit = retryAt(error);
+                }
+                schedule();
+            });
+        }, Math.min(delay, 2_147_483_647));
+        timer.unref();
+    };
+    const retryAt = (error) => {
+        if (error instanceof EmsError && error.code === "rate_limited")
+            return Date.now() + (error.details?.retryAfterMs ?? 0);
+        return lastRateLimit;
+    };
+    const close = server.close.bind(server);
+    server.close = async () => {
+        stopped = true;
+        clearTimeout(timer);
+        await close();
+    };
     const read = {
         readOnlyHint: true,
         destructiveHint: false,
@@ -13,30 +59,56 @@ export function createServer(adapter, service = new EmsService(adapter)) {
         openWorldHint: true,
     };
     function tool(name, description, schema, annotations, call) {
-        server.registerTool(name, { description, inputSchema: schema, annotations }, async (value, extra) => service.queue.run(async () => {
-            if (extra.signal.aborted)
-                throw new EmsError("cancelled", "The tool call was cancelled before execution.");
-            const abort = () => {
-                void adapter.close();
-            };
-            extra.signal.addEventListener("abort", abort, { once: true });
-            try {
-                const data = await call(value);
-                return {
-                    content: [{ type: "text", text: JSON.stringify(data) }],
-                    structuredContent: { result: data },
-                };
-            }
-            catch (e) {
-                return {
-                    isError: true,
-                    content: [{ type: "text", text: JSON.stringify(errorResult(e)) }],
-                };
-            }
-            finally {
-                extra.signal.removeEventListener("abort", abort);
-            }
-        }));
+        server.registerTool(name, { description, inputSchema: schema, annotations }, async (value, extra) => {
+            clearTimeout(timer);
+            pending++;
+            return service.queue.run(async () => {
+                let authFailed = false;
+                const abort = () => { void adapter.close(); };
+                extra.signal.addEventListener("abort", abort, { once: true });
+                try {
+                    if (extra.signal.aborted)
+                        throw new EmsError("cancelled", "The tool call was cancelled before execution.");
+                    let data;
+                    try {
+                        data = await call(value);
+                    }
+                    catch (error) {
+                        if (!(error instanceof EmsError) || error.code !== "auth_required" ||
+                            !annotations.readOnlyHint || name === "ems_prepare_change" ||
+                            !adapter.renewSession || extra.signal.aborted)
+                            throw error;
+                        service.invalidateDrafts();
+                        await adapter.renewSession();
+                        if (extra.signal.aborted)
+                            throw new EmsError("cancelled", "The tool call was cancelled during reauthentication.");
+                        data = await call(value);
+                    }
+                    return {
+                        content: [{ type: "text", text: JSON.stringify(data) }],
+                        structuredContent: { result: data },
+                    };
+                }
+                catch (error) {
+                    authFailed = requiresSignIn(error);
+                    if (authFailed)
+                        service.invalidateDrafts();
+                    lastRateLimit = retryAt(error);
+                    const result = errorResult(error);
+                    return {
+                        isError: true,
+                        content: [{ type: "text", text: JSON.stringify(result) }],
+                        structuredContent: result,
+                    };
+                }
+                finally {
+                    extra.signal.removeEventListener("abort", abort);
+                    pending--;
+                    if (!authFailed)
+                        schedule();
+                }
+            });
+        });
     }
     tool("ems_session_status", "Check the dedicated Yale SOM EMS session. If auth_required, run login locally and complete Yale SSO/MFA.", z.object({}).strict(), read, async () => {
         const identity = await adapter.identity();

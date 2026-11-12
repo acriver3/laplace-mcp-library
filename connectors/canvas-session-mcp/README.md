@@ -86,6 +86,16 @@ Canvas and most school SSOs use *session* cookies that a browser forgets when it
 
 Prefer no pop-ups? Set `CANVAS_MCP_RENEW=hidden` and run `login` yourself when `status` reports an expired session.
 
+Laplace saves same-origin cookie changes during normal API use. On confirmed expiry,
+it tries the existing profile and verifies the Canvas account before resuming a read.
+Older profiles record their account the next time a session check succeeds. If that
+session has already expired, reconnect once to bind the account. Writes check the
+session before dispatch. If authentication fails after dispatch, check Canvas before
+retrying.
+
+Background session checks default to off. They require opt-in and a verified
+interval for the configured Canvas origin.
+
 ### How it was verified
 
 - **18 automated tests** run against a fake Canvas server and through a real MCP client: pagination, cookie refresh, hidden-Files fallback, duplicate uploads, setup writing each app's config, and a check that only `GET` requests are ever sent.

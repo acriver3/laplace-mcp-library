@@ -1,36 +1,15 @@
 import fs from 'node:fs';
-import path from 'node:path';
 import { chromium } from 'playwright-core';
-import { PROFILE_DIR, HOME, CMD } from './config.js';
+import { PROFILE_DIR, CMD } from './config.js';
+import { canvasCookies, loadCookies, saveCookies } from './session-cookies.js';
 
-// Canvas and most school SSOs use *session* cookies, which Chrome drops when the window
-// closes. So after a successful sign-in we keep the cookies ourselves (in your home folder,
-// readable only by you) and put them back the next time. This is the same data the browser
-// profile would hold anyway; it never leaves your computer.
-const SESSION_FILE = path.join(HOME, 'session.json');
-
-function loadCookies() {
-  try {
-    const now = Date.now() / 1000;
-    return JSON.parse(fs.readFileSync(SESSION_FILE, 'utf8')).filter((c) => c.expires === -1 || c.expires > now);
-  } catch { return []; }
+export function signInRequired(message = 'Sign in required. Reconnect Canvas in Laplace or run login with the existing Canvas URL and session directory.') {
+  return Object.assign(new Error(message), { code: 'sign_in_required' });
 }
 
-function saveCookies(cookies) {
-  fs.mkdirSync(HOME, { recursive: true });
-  fs.writeFileSync(SESSION_FILE, JSON.stringify(cookies), { mode: 0o600 });
-}
-
-const matches = (host, c) => { const d = c.domain.replace(/^\./, ''); return host === d || host.endsWith('.' + d); };
-const cookieHeader = (cookies, base) => {
-  const host = new URL(base).hostname;
-  return cookies.filter((c) => matches(host, c)).map((c) => `${c.name}=${c.value}`).join('; ');
-};
-
-// Cookies saved by the last sign-in, without starting a browser. Null if there are none.
 export function savedSession(base) {
-  const header = cookieHeader(loadCookies(), base);
-  return header ? { cookieHeader: header } : null;
+  const cookies = canvasCookies(base, loadCookies());
+  return cookies.header(new URL('/api/v1/users/self', base)) ? { cookies } : null;
 }
 
 // Many schools switched off "New Access Token" for students. Canvas's own web app calls
@@ -54,7 +33,9 @@ export async function launch({ headless }) {
 async function whoAmI(page) {
   return page.evaluate(async () => {
     try {
-      const r = await fetch('/api/v1/users/self', { credentials: 'include', headers: { Accept: 'application/json' } });
+      const r = await fetch('/api/v1/users/self', {
+        credentials: 'include', headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(4_000),
+      });
       if (!r.ok) return null;
       return JSON.parse((await r.text()).replace(/^while\(1\);/, ''));
     } catch { return null; }
@@ -72,7 +53,7 @@ const LOGIN_PATH = /^\/login\/(?!canvas\b)[a-z_]+(\/\d+)?$/;
 //   onLoginPath(path)  called with the SSO entry point the browser went through
 // Headless gives the SSO redirects a little time to bounce back on their own; a visible
 // window waits for you to finish signing in, MFA included.
-export async function openSession(base, { headless = true, startPath = '/', timeoutMs = headless ? 20000 : 600000, onLoginPath } = {}) {
+export async function openSession(base, { headless = true, startPath = '/', timeoutMs = headless ? 20000 : 600000, onLoginPath, expectedId } = {}) {
   const ctx = await launch({ headless });
   try {
     const saved = loadCookies();
@@ -86,7 +67,7 @@ export async function openSession(base, { headless = true, startPath = '/', time
       if (LOGIN_PATH.test(pathname)) loginPath = pathname;
     });
     watch(first);
-    await first.goto(base + startPath, { waitUntil: 'domcontentloaded' }).catch(() => {});
+    await first.goto(base + (LOGIN_PATH.test(startPath) ? startPath : '/'), { waitUntil: 'domcontentloaded', timeout: Math.min(30000, timeoutMs) }).catch(() => {});
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
       // SSO sometimes continues in another tab; watch whichever Canvas tab is still open.
@@ -96,10 +77,12 @@ export async function openSession(base, { headless = true, startPath = '/', time
       if (sameOrigin(page.url(), base) && !/\/login/.test(new URL(page.url()).pathname)) {
         const me = await whoAmI(page);
         if (me?.id) {
+          if (expectedId !== undefined && String(me.id) !== String(expectedId))
+            throw Object.assign(new Error('Canvas returned a different account. Sign in to the original account or reconnect explicitly.'), { code: 'identity_mismatch' });
           const all = await ctx.cookies();   // Canvas and the SSO provider, so SSO can renew later
           saveCookies(all);
           if (loginPath && onLoginPath) onLoginPath(loginPath);
-          return { me, cookieHeader: cookieHeader(all, base) };
+          return { me, cookies: canvasCookies(base, all) };
         }
       }
       await new Promise((r) => setTimeout(r, 1000));
@@ -116,25 +99,22 @@ export async function openSession(base, { headless = true, startPath = '/', time
 //     remembers you it signs in and closes by itself in a second or two; if the SSO session
 //     has ended too, the window waits for you to sign in (bot checks are left to you, never automated).
 // CANVAS_MCP_RENEW=hidden skips step 2 (then run `login` yourself when the session expires).
-//  `hiddenWorks: false` (remembered after the first failure) skips step 1, which saves ~20 s.
 //  A tool call waits at most `waitMs` for the window (AI apps time out around 60 s). If you are
 //  still typing your password, the call reports that and the window stays open; once you finish,
 //  the session is saved and the next request just works. Only one window is ever open at a time.
 let signInWindow = null;
 const SIGN_IN_HINT = 'A Canvas sign-in window is open. Sign in there, then ask again.';
 
-export async function renewSession(base, { loginPath, onLoginPath, hiddenWorks, onHiddenResult = () => {}, log = () => {}, waitMs = 40000 } = {}) {
-  if (!loadCookies().length) throw new Error(`Not signed in to Canvas yet. Run: ${CMD} setup`);
+export async function renewSession(base, { loginPath, onLoginPath, expectedId, log = () => {}, waitMs = 40000 } = {}) {
+  if (expectedId === undefined) throw signInRequired(`Not signed in to Canvas yet. Run: ${CMD} setup or reconnect the existing connector.`);
   if (signInWindow) return waitFor(signInWindow, waitMs);
-  if (hiddenWorks !== false) {
-    try { const s = await openSession(base, { headless: true, onLoginPath }); onHiddenResult(true); return s; }
-    catch { onHiddenResult(false); }
-  }
+  try { return await openSession(base, { headless: true, startPath: loginPath, onLoginPath, expectedId }); }
+  catch (error) { if (error.code === 'identity_mismatch') throw error; }
   if (process.env.CANVAS_MCP_RENEW === 'hidden') {
-    throw new Error(`Your Canvas session has expired. Run: ${CMD} login`);
+    throw signInRequired();
   }
   log('Canvas session expired; opening a sign-in window…');
-  signInWindow = openSession(base, { headless: false, startPath: loginPath || '/', timeoutMs: 600000, onLoginPath })
+  signInWindow = openSession(base, { headless: false, startPath: loginPath || '/', timeoutMs: 600000, onLoginPath, expectedId })
     .finally(() => { signInWindow = null; });
   signInWindow.catch(() => {});   // the outcome is reported by waitFor, or by the next call
   return waitFor(signInWindow, waitMs);
@@ -146,7 +126,7 @@ async function waitFor(win, ms) {
   try {
     return await Promise.race([win, late]);
   } catch (e) {
-    if (e.message === SIGN_IN_HINT) throw e;
-    throw new Error(`Canvas sign-in was not completed (${e.message}). Run: ${CMD} login`);
+    if (e.code) throw e;
+    throw signInRequired();
   } finally { clearTimeout(timer); }
 }

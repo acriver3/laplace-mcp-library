@@ -8,7 +8,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { BrowserAdapter } from "./adapter.js";
 import { EmsBrowser, DEFAULT_PROFILE } from "./browser.js";
 import { EmsService } from "./core.js";
-import { createServer } from "./server.js";
+import { backgroundInterval, createServer } from "./server.js";
 import { errorResult, EmsError } from "./types.js";
 
 const { values, positionals } = parseArgs({
@@ -120,10 +120,10 @@ try {
 			uncertain,
 			() => unlink(marker),
 		);
-		const server = createServer(adapter, service);
+		const server = createServer(adapter, service, backgroundInterval());
 		const transport = new StdioServerTransport();
 		process.stdin.once("end", () => {
-			void stop().finally(() => server.close());
+			void server.close().finally(() => stop());
 		});
 		await server.connect(transport);
 	}

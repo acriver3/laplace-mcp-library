@@ -1,7 +1,8 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { HOME, downloadDir, CMD } from './config.js';
+import { HOME, downloadDir } from './config.js';
+import { signInRequired } from './browser.js';
 
 const MAX_DOWNLOAD = 60 * 1024 * 1024;
 const MAX_UPLOAD = 100 * 1024 * 1024;
@@ -48,16 +49,19 @@ export class UncertainWriteError extends Error {
   }
 }
 
-// Canvas client. GETs go through request(); writes (POST/PUT/DELETE) go through send(), which
-// adds the CSRF token, only ever talks to the Canvas origin, never follows redirects and never
-// retries once a request may have been processed.
-// `session()` returns { cookieHeader } and is called again (fresh=true) once if Canvas says 401.
+const redirects = [301, 302, 303, 307, 308];
+const authCandidate = (res) => res.status === 401 || res.status === 403 || redirects.includes(res.status);
+const isIdentity = (value) => !!value?.id;
+
 export class CanvasClient {
-  constructor({ base, session, fetchImpl = fetch }) {
-    this.base = base;
+  constructor({ base, session, verifyAccount = () => {}, fetchImpl = fetch }) {
+    this.base = new URL(base).origin;
     this.session = session;
+    this.verifyAccount = verifyAccount;
     this.fetch = fetchImpl;
-    this.cookie = null;
+    this.current = null;
+    this.recovery = null;
+    this.rateLimitedUntil = 0;
     this.courseFolders = new Map();   // course id → folder name (course code)
     this.fileCourse = new Map();      // file id → course id, noted whenever a tool sees the file inside a course
   }
@@ -72,37 +76,135 @@ export class CanvasClient {
     return this.courseFolders.get(String(courseId));
   }
 
-  async request(url, { raw = false } = {}) {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      if (!this.cookie || attempt === 1) this.cookie = (await this.session({ fresh: attempt === 1 })).cookieHeader;
-      // Laplace modification: keep Canvas session cookies on their origin.
-      let current = new URL(url);
-      let res;
-      for (let redirects = 0; ; redirects++) {
-        if (current.protocol !== 'https:' && current.origin !== new URL(this.base).origin) {
-          throw new Error('External Canvas downloads must use HTTPS.');
+  async credentials() {
+    if (this.recovery) await this.recovery;
+    this.current ??= await this.session();
+    return this.current;
+  }
+
+  async fetchWithSession(url, options, credentials) {
+    const sameOrigin = new URL(url).origin === this.base;
+    const cookie = sameOrigin ? credentials?.cookies?.header(url) ?? credentials?.cookieHeader : '';
+    const headers = { ...options.headers };
+    if (cookie) headers.Cookie = cookie;
+    if (sameOrigin && options.method !== 'GET') {
+      const token = csrfToken(cookie);
+      if (!token) throw signInRequired('The Canvas session is missing its CSRF token. Use the Canvas login command before making changes.');
+      headers['X-CSRF-Token'] = token;
+    }
+    let res;
+    try { res = await this.fetch(url, { ...options, headers, redirect: 'manual' }); }
+    catch (error) {
+      if (error.name === 'TypeError' || error.name === 'TimeoutError')
+        throw Object.assign(new Error('The Canvas connection was interrupted.'), { code: 'transport_unavailable' });
+      throw error;
+    }
+    if (sameOrigin && res.status === 429) {
+      const value = res.headers.get('retry-after') ?? '';
+      const retryAt = /^\d+$/.test(value) ? Date.now() + Number(value) * 1000 : Date.parse(value);
+      this.rateLimitedUntil = Math.max(this.rateLimitedUntil, Number.isFinite(retryAt) ? retryAt : Date.now() + 60_000);
+    }
+    // Late responses from a session that has been replaced must not overwrite the new session.
+    if (sameOrigin && credentials === this.current) credentials?.cookies?.update(url, res.headers);
+    return res;
+  }
+
+  async probe(credentials, signal, candidate = false) {
+    const url = this.url('users/self');
+    const res = await this.fetchWithSession(url, {
+      method: 'GET', headers: { Accept: 'application/json' }, signal,
+    }, credentials);
+    if (authCandidate(res)) {
+      await res.body?.cancel?.();
+      throw signInRequired();
+    }
+    if (!res.ok) {
+      await res.body?.cancel?.();
+      throw Object.assign(new Error(`Canvas identity check failed (${res.status}).`), {
+        status: res.status,
+        ...(res.status >= 500 ? { code: 'transport_unavailable' } : {}),
+        ...(res.status === 429 ? {
+          code: 'rate_limited', retryAfterMs: Math.max(0, this.rateLimitedUntil - Date.now()),
+        } : {}),
+      });
+    }
+    const text = await res.text();
+    let identity;
+    try { identity = parseJson(text); } catch {
+      if (res.headers.get('content-type')?.includes('text/html') && /<form[^>]+(?:login|sign.in)/i.test(text))
+        throw signInRequired();
+    }
+    if (!isIdentity(identity)) throw new Error('Canvas did not return a recognizable account.');
+    this.verifyAccount(identity);
+    if (candidate) credentials.cookies?.update(url, res.headers);
+    return identity;
+  }
+
+  recover(previous, confirmed = false) {
+    if (this.current !== previous) return Promise.resolve(this.current);
+    if (!this.recovery) {
+      this.recovery = (async () => {
+        if (!confirmed) {
+          try { await this.probe(previous); return null; }
+          catch (error) { if (error.code !== 'sign_in_required') throw error; }
         }
-        const headers = { Accept: raw ? '*/*' : 'application/json' };
-        if (current.origin === new URL(this.base).origin) headers.Cookie = this.cookie;
-        res = await this.fetch(current.href, { method: 'GET', headers, redirect: 'manual' });
-        if (![301, 302, 303, 307, 308].includes(res.status)) break;
+        const renewed = await this.session({ fresh: true });
+        await this.probe(renewed, undefined, true);
+        this.current = renewed;
+        return renewed;
+      })().finally(() => { this.recovery = null; });
+    }
+    return this.recovery;
+  }
+
+  async request(url, { raw = false, allowRecovery = true } = {}) {
+    const requested = new URL(url);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const credentials = requested.origin === this.base ? await this.credentials() : null;
+      let current = requested;
+      let res;
+      let retry = false;
+      for (let hop = 0; ; hop++) {
+        if (current.protocol !== 'https:' && current.origin !== this.base)
+          throw new Error('External Canvas downloads must use HTTPS.');
+        res = await this.fetchWithSession(current.href, {
+          method: 'GET', headers: { Accept: raw ? '*/*' : 'application/json' },
+        }, credentials);
         const location = res.headers.get('location');
+        const next = location && redirects.includes(res.status) ? new URL(location, current) : null;
+        const loginRedirect = next && next.origin === this.base && /^\/login(?:\/|$)/.test(next.pathname);
+        const authRedirect = next && (!raw || loginRedirect);
+        if (credentials && current.origin === this.base &&
+            (res.status === 401 || res.status === 403 || authRedirect)) {
+          if (allowRecovery && attempt === 0 && await this.recover(credentials)) {
+            await res.body?.cancel?.();
+            retry = true;
+            break;
+          }
+          if (loginRedirect || (!allowRecovery && res.status === 401)) {
+            await res.body?.cancel?.();
+            throw signInRequired();
+          }
+        }
+        if (!redirects.includes(res.status)) break;
         await res.body?.cancel?.();
-        if (!location || redirects >= 9) throw new Error('Invalid Canvas download redirect.');
-        current = new URL(location, current);
+        if (!next || hop >= 9) throw new Error('Invalid Canvas download redirect.');
+        current = next;
       }
-      if (res.status === 401 && attempt === 0) { await res.body?.cancel?.(); continue; }
+      if (retry) continue;
       if (!res.ok) {
         const text = await res.text().catch(() => '');
         let msg = text.slice(0, 200);
         try { const j = parseJson(text); msg = j.errors?.[0]?.message || j.message || msg; } catch { /* not JSON */ }
-        const err = new Error(`Canvas ${res.status}${msg ? `: ${msg}` : ''}`);
-        err.status = res.status;
-        throw err;
+        throw Object.assign(new Error(`Canvas ${res.status}${msg ? `: ${msg}` : ''}`), {
+          status: res.status, ...(res.status === 429 ? {
+            code: 'rate_limited', retryAfterMs: Math.max(0, this.rateLimitedUntil - Date.now()),
+          } : {}),
+        });
       }
       return res;
     }
-    throw new Error(`Canvas keeps answering 401. Run: ${CMD} login`);
+    throw signInRequired();
   }
 
   url(p, params) {
@@ -112,48 +214,47 @@ export class CanvasClient {
   }
 
   async get(p, params = {}) {
+    if (p === 'users/self' && Object.keys(params).length === 0) {
+      const credentials = await this.credentials();
+      try { return await this.probe(credentials); }
+      catch (error) {
+        if (error.code !== 'sign_in_required') throw error;
+        return this.probe(await this.recover(credentials, true));
+      }
+    }
     const res = await this.request(this.url(p, params));
     return parseJson(await res.text());
   }
 
-  // POST/PUT/DELETE a Canvas API path with a JSON body. A 401 means Canvas rejected the request
-  // before acting on it, so the session is renewed and the call made once more. Anything else
-  // that leaves the outcome open (network failure, timeout, 5xx) is reported, not retried.
   async send(method, p, body, { what = `${method} ${p}` } = {}) {
     const url = this.url(p);
-    if (new URL(url).origin !== new URL(this.base).origin) throw new Error('Canvas writes must stay on the Canvas origin.');
-    for (let attempt = 0; attempt < 2; attempt++) {
-      if (!this.cookie || attempt === 1) this.cookie = (await this.session({ fresh: attempt === 1 })).cookieHeader;
-      const token = csrfToken(this.cookie);
-      if (!token) throw new Error(`The saved Canvas session has no CSRF token, so Canvas would refuse this change. Run: ${CMD} login`);
-      let res;
-      try {
-        res = await this.fetch(url, {
-          method,
-          headers: { Accept: 'application/json', 'Content-Type': 'application/json', Cookie: this.cookie, 'X-CSRF-Token': token },
-          body: body === undefined ? undefined : JSON.stringify(body),
-          redirect: 'manual',
-        });
-      } catch (e) {
-        throw new UncertainWriteError(what, e.message);
-      }
-      if (res.status === 401 && attempt === 0) { await res.body?.cancel?.(); continue; }
-      const text = await res.text().catch(() => '');
-      if (res.status >= 500) throw new UncertainWriteError(what, `Canvas ${res.status}`);
-      if (!res.ok) {
-        let msg = text.slice(0, 300);
-        try {
-          const j = parseJson(text);
-          msg = j.errors?.[0]?.message || (j.errors && typeof j.errors === 'object' ? JSON.stringify(j.errors) : null) || j.message || msg;
-        } catch { /* not JSON */ }
-        if (res.status === 422 && /authenticity|csrf/i.test(msg)) msg = `Canvas rejected the session's security token. Run: ${CMD} login`;
-        const err = new Error(`Canvas ${res.status}${msg ? `: ${msg}` : ''}`);
-        err.status = res.status;
-        throw err;
-      }
-      try { return text ? parseJson(text) : {}; } catch { return {}; }
+    if (new URL(url).origin !== this.base) throw new Error('Canvas writes must stay on the Canvas origin.');
+    await this.get('users/self');
+    const credentials = await this.credentials();
+    let res;
+    try {
+      res = await this.fetchWithSession(url, {
+        method, headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      }, credentials);
+    } catch (error) {
+      if (error.code === 'sign_in_required') throw error;
+      throw new UncertainWriteError(what, error.message);
     }
-    throw new Error(`Canvas keeps answering 401. Run: ${CMD} login`);
+    const text = await res.text().catch(() => '');
+    if (res.status >= 500) throw new UncertainWriteError(what, `Canvas ${res.status}`);
+    if (res.status === 401 || redirects.includes(res.status))
+      throw signInRequired('Canvas rejected the write session. Check Canvas, reconnect, then decide whether to submit again.');
+    if (!res.ok) {
+      let msg = text.slice(0, 300);
+      try {
+        const j = parseJson(text);
+        msg = j.errors?.[0]?.message || (j.errors && typeof j.errors === 'object' ? JSON.stringify(j.errors) : null) || j.message || msg;
+      } catch { /* not JSON */ }
+      if (res.status === 422 && /authenticity|csrf/i.test(msg)) throw signInRequired();
+      throw Object.assign(new Error(`Canvas ${res.status}${msg ? `: ${msg}` : ''}`), { status: res.status });
+    }
+    try { return text ? parseJson(text) : {}; } catch { return {}; }
   }
 
   // Uploads a local file through Canvas's three-step file API: ask Canvas for an upload slot
@@ -174,11 +275,12 @@ export class CanvasClient {
     for (const [k, v] of Object.entries(slot.upload_params || {})) form.append(k, String(v));
     form.append('file', new Blob([fs.readFileSync(filePath)]), name);   // the file must be the last field
     const headers = { Accept: 'application/json' };
-    if (sameOrigin) Object.assign(headers, { Cookie: this.cookie, 'X-CSRF-Token': csrfToken(this.cookie) });
+    const credentials = sameOrigin ? await this.credentials() : null;
     let res;
     try {
-      res = await this.fetch(target.href, { method: 'POST', headers, body: form, redirect: 'manual' });
+      res = await this.fetchWithSession(target.href, { method: 'POST', headers, body: form }, credentials);
     } catch (e) {
+      if (e.code === 'sign_in_required') throw e;
       throw new UncertainWriteError(`${what} (sending ${name})`, e.message);
     }
     if (res.status >= 500) throw new UncertainWriteError(`${what} (sending ${name})`, `upload host ${res.status}`);
@@ -195,7 +297,7 @@ export class CanvasClient {
     if (!info.location) throw new Error(`Canvas did not confirm the upload of ${name}.`);
     const confirm = new URL(info.location, this.base);
     if (confirm.origin !== new URL(this.base).origin) throw new Error('Canvas upload confirmation must come from the Canvas origin.');
-    const done = parseJson(await (await this.request(confirm.href)).text());
+    const done = parseJson(await (await this.request(confirm.href, { allowRecovery: false })).text());
     if (!done.id) throw new Error(`Canvas did not confirm the upload of ${name}.`);
     return { id: done.id, name: done.display_name || name, size: stat.size };
   }

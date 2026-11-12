@@ -35,6 +35,14 @@ stop its remaining browser before using `status --release-stale-lock`.
 Attach the `serve` command through Laplace Local. Setup checks `ems_session_status` and
 `ems_list_templates` directly and through the wrapper. It does not test writes.
 
+When a read detects expiry, the connector can follow the EMS sign-in link in the
+same profile and resume if Yale SSO returns to the same account. It verifies the
+account using the email in EMS My Account and saves only its local fingerprint.
+If EMS cannot expose that identity or Yale needs your input, reconnect in Laplace
+or run `login` with the same profile and browser. A recovered session requires a
+new booking preview and confirmation. Background checks default to off and require
+a verified interval before they run.
+
 ## Tools
 
 | Tool                       | Purpose                                                             |

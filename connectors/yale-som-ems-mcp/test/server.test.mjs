@@ -10,7 +10,8 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 
 import { ProfileLock } from "../dist/browser.js";
-import { createServer } from "../dist/server.js";
+import { backgroundInterval, createServer } from "../dist/server.js";
+import { EmsError } from "../dist/types.js";
 
 void test("real stdio initialization and eight tools require no browser or login", async () => {
 	const dir = await mkdtemp(join(tmpdir(), "ems-stdio-"));
@@ -103,5 +104,88 @@ void test("profile ownership is exclusive and releases only its own lock", async
 		await first.release();
 		await second.release();
 		await rm(dir, { recursive: true, force: true });
+	}
+});
+
+void test("renews EMS reads once and clears pending booking drafts", async () => {
+	const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+	let renewals = 0, reads = 0, prepares = 0, submits = 0;
+	const adapter = {
+		async identity() {
+			if (++reads === 1) throw new EmsError("auth_required", "Sign in required");
+			return { key: "fresh", name: "Test Student" };
+		},
+		async renewSession() { renewals++; },
+		async prepare() {
+			prepares++;
+			return { identity: "expired", preview: { operation: "cancel" } };
+		},
+		async submit() { submits++; },
+	};
+	const server = createServer(adapter);
+	const client = new Client({ name: "fixture", version: "1.0.0" });
+	try {
+		await server.connect(serverTransport);
+		await client.connect(clientTransport);
+		const draft = await client.callTool({
+			name: "ems_prepare_change",
+			arguments: { operation: "cancel", reservation_id: "2", booking_id: "3" },
+		});
+		const status = await client.callTool({ name: "ems_session_status", arguments: {} });
+		assert.equal(status.structuredContent.result.authenticated, true);
+		const commit = await client.callTool({
+			name: "ems_commit_change",
+			arguments: { confirm: true, draft_id: draft.structuredContent.result.draft_id },
+		});
+		assert.equal(commit.structuredContent.code, "draft_expired");
+		assert.deepEqual([reads, renewals, prepares, submits], [2, 1, 1, 0]);
+	} finally {
+		await client.close();
+		await server.close();
+	}
+});
+
+void test("background checks default off, defer after rate limits, and stop at sign-in or shutdown", async (t) => {
+	assert.equal(backgroundInterval({ EMS_VERIFIED_CHECK_MINUTES: "30" }), 0);
+	assert.equal(backgroundInterval({ LAPLACE_BACKGROUND_SESSION_CHECKS: "on" }), 0);
+	assert.equal(backgroundInterval({
+		LAPLACE_BACKGROUND_SESSION_CHECKS: "on", EMS_VERIFIED_CHECK_MINUTES: "30",
+	}), 1_800_000);
+	t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+	const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+	let checks = 0;
+	const server = createServer({
+		async identity() { return { key: "test", name: "Test Student" }; },
+		async checkSession() {
+			if (++checks === 1) throw new EmsError("rate_limited", "Slow down", { retryAfterMs: 5_000 });
+			throw new EmsError("auth_required", "Sign in required");
+		},
+	}, undefined, 1_000);
+	const client = new Client({ name: "fixture", version: "1.0.0" });
+	const advance = async (milliseconds) => {
+		t.mock.timers.tick(milliseconds);
+		await new Promise((resolve) => setImmediate(resolve));
+	};
+	try {
+		await server.connect(serverTransport);
+		await client.connect(clientTransport);
+		await advance(20_000);
+		assert.equal(checks, 0);
+		await client.callTool({ name: "ems_session_status", arguments: {} });
+		await advance(1_000);
+		assert.equal(checks, 1);
+		await advance(4_999);
+		assert.equal(checks, 1);
+		await advance(1);
+		assert.equal(checks, 2);
+		await advance(20_000);
+		assert.equal(checks, 2);
+		await client.callTool({ name: "ems_session_status", arguments: {} });
+		await server.close();
+		await advance(20_000);
+		assert.equal(checks, 2);
+	} finally {
+		await client.close();
+		await server.close();
 	}
 });

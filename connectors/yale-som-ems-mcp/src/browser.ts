@@ -1,5 +1,5 @@
 import { randomUUID, createHash } from "node:crypto";
-import { mkdir, open, readFile, unlink, realpath } from "node:fs/promises";
+import { mkdir, open, readFile, unlink, realpath, writeFile, rename, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, resolve, relative, isAbsolute, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -140,55 +140,139 @@ export class EmsBrowser {
 			);
 		}
 	}
-	async identity() {
+	async identity(timeout = 10_000) {
 		const page = await this.page();
-		// EMS renders a Guest header before its asynchronous account bootstrap.
-		// Wait for that bootstrap rather than rejecting a valid saved session.
-		await page
-			.waitForFunction(
-				(base) =>
-					location.href.startsWith(base) &&
+		// A valid EMS page briefly shows Guest while its account header initializes.
+		try {
+			await page.waitForFunction(
+				(base) => location.href.startsWith(base) &&
 					!!document.querySelector("#usernameid")?.textContent?.trim() &&
-					!/guest|sign in|login/i.test(document.querySelector("#usernameid")?.textContent || ""),
-				EMS_BASE,
-				{ timeout: 10_000 },
-			)
-			.catch(() => {});
-		const name = await page
-			.locator("#usernameid")
-			.textContent()
-			.catch(() => null);
-		if (!page.url().startsWith(EMS_BASE) || !name?.trim() || /guest|sign in|login/i.test(name))
-			throw new EmsError(
-				"auth_required",
-				"Run the bundled CLI login command with this same profile and browser, and complete Yale SSO/MFA.",
+					!/\bguest\b|^sign in$|^login$/i.test(document.querySelector("#usernameid")?.textContent?.trim() || ""),
+				EMS_BASE, { timeout },
 			);
+		} catch (error) {
+			if (!(error instanceof Error) || error.name !== "TimeoutError") throw error;
+		}
+		const url = new URL(page.url());
+		const name = await page.locator("#usernameid").textContent({ timeout: 500 }).catch(() => null);
+		const signedOut = name && /\bguest\b|^sign in$|^login$/i.test(name.trim());
+		const login = /\/(?:login|signin|logon|saml)(?:[./]|$)/i.test(url.pathname);
+		if (signedOut || login || url.hostname === "secure.its.yale.edu")
+			throw signInRequired();
+		if (!url.href.startsWith(EMS_BASE) || !name?.trim())
+			throw new EmsError("page_changed", "EMS did not return a recognizable account page.");
 		const cookies = (await page.context().cookies(EMS_BASE))
 			.filter((c) => c.httpOnly && !/^ARRAffinity/i.test(c.name))
 			.sort((a, b) => a.name.localeCompare(b.name));
-		if (!cookies.length)
-			throw new EmsError(
-				"auth_required",
-				"No authenticated EMS session is available. Run login again.",
-			);
+		if (!cookies.length) throw signInRequired();
 		const key = createHash("sha256")
 			.update(JSON.stringify([name.trim(), cookies.map((c) => [c.name, c.value])]))
 			.digest("hex");
 		return { key, name: name.trim() };
 	}
-	async login(timeoutMs = 1_800_000) {
+
+	async openHome(timeout = 30_000) {
 		const page = await this.page();
-		await page.goto(`${EMS_BASE}Default.aspx`, { waitUntil: "domcontentloaded" });
-		await page.waitForFunction(
-			(base) =>
-				location.href.startsWith(base) &&
-				!!document.querySelector("#usernameid")?.textContent?.trim() &&
-				!/guest|sign in|login/i.test(document.querySelector("#usernameid")?.textContent || ""),
-			EMS_BASE,
-			{ timeout: timeoutMs },
-		);
-		return this.identity();
+		await this.navigate(page, `${EMS_BASE}Default.aspx`, timeout);
+		return page;
 	}
+
+	async navigate(page: Page, url: string, timeout = 30_000) {
+		const response = await page.goto(url, { waitUntil: "domcontentloaded", timeout }).catch((error) => {
+			if (error instanceof Error && (error.name === "TimeoutError" || error.message.includes("net::ERR_")))
+				throw new EmsError("transport_unavailable", "The EMS connection was interrupted.");
+			throw error;
+		});
+		this.checkNavigation(response);
+	}
+
+	private checkNavigation(response: Awaited<ReturnType<Page["goto"]>>) {
+		const status = response?.status();
+		if (status === 401) throw signInRequired();
+		if (status === 429) {
+			const value = response?.headers()["retry-after"] ?? "";
+			const delay = /^\d+$/.test(value) ? Number(value) * 1000 : Date.parse(value) - Date.now();
+			throw new EmsError("rate_limited", "EMS is rate limiting requests.", {
+				retryAfterMs: Number.isFinite(delay) ? Math.max(0, delay) : 60_000,
+			});
+		}
+		if (status && status >= 500)
+			throw new EmsError("transport_unavailable", "EMS is temporarily unavailable.");
+	}
+
+	async accountFingerprint(page: Page) {
+		// My Account is a provider-rendered, read-only route. A display name alone cannot bind a renewal.
+		const link = page.locator("a").filter({ hasText: /^\s*My Account\s*$/i });
+		if ((await link.count()) !== 1) return;
+		const href = await link.getAttribute("href");
+		if (!href || href.startsWith("#")) return;
+		const url = new URL(href, page.url());
+		if (!url.href.startsWith(EMS_BASE) || url.href === page.url()) return;
+		const account = await page.context().newPage();
+		try {
+			await this.navigate(account, url.href, 8_000);
+			if (!account.url().startsWith(EMS_BASE)) return;
+			const field = account.getByLabel(/^\s*(?:e-?mail(?: address)?)[\s:*]*$/i);
+			const email = await field.inputValue({ timeout: 2_000 }).catch(() => "");
+			if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()))
+				return createHash("sha256").update(email.trim().toLowerCase()).digest("hex");
+		} finally {
+			await account.close().catch(() => {});
+		}
+	}
+
+	async boundAccount() {
+		const value = await readFile(`${this.profile}.account`, "utf8").catch((error) => {
+			if (error.code === "ENOENT") return "";
+			throw error;
+		});
+		if (value && !/^[a-f0-9]{64}$/.test(value))
+			throw new EmsError("identity_mismatch", "The saved EMS account could not be verified. Reconnect EMS.");
+		return value || undefined;
+	}
+
+	async bindAccount(fingerprint?: string) {
+		const file = `${this.profile}.account`;
+		if (!fingerprint) {
+			await rm(file, { force: true });
+			return;
+		}
+		const temporary = `${file}.${randomUUID()}`;
+		try {
+			await writeFile(temporary, fingerprint, { mode: 0o600, flag: "wx" });
+			await rename(temporary, file);
+		} finally {
+			await rm(temporary, { force: true });
+		}
+	}
+
+	async login(timeoutMs = 1_800_000) {
+		const page = await this.openHome();
+		const identity = await this.identity(timeoutMs);
+		await this.bindAccount(await this.accountFingerprint(page).catch(() => undefined));
+		return identity;
+	}
+
+	async renew() {
+		const expected = await this.boundAccount();
+		if (!expected) throw signInRequired();
+		const page = await this.openHome(12_000);
+		if (page.url().startsWith(EMS_BASE)) {
+			const signIn = page.getByRole("link", { name: "Sign In", exact: true });
+			if (await signIn.count() === 1 && await signIn.isVisible())
+				await signIn.click({ timeout: 4_000 });
+		}
+		const identity = await this.identity(8_000).catch((error) => {
+			if (error instanceof EmsError && error.code === "page_changed") throw signInRequired();
+			throw error;
+		});
+		const actual = await this.accountFingerprint(page);
+		if (!actual) throw signInRequired();
+		if (actual !== expected)
+			throw new EmsError("identity_mismatch", "EMS returned a different account. Reconnect to the original account.");
+		return identity;
+	}
+
 	async close() {
 		this.currentPage = undefined;
 		const context = this.context;
@@ -199,4 +283,8 @@ export class EmsBrowser {
 			await this.lock.release();
 		}
 	}
+}
+
+export function signInRequired() {
+	return new EmsError("auth_required", "Sign in required. Reconnect Yale SOM EMS or run login with the same profile and browser.");
 }

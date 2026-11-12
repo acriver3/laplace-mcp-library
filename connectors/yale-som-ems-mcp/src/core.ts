@@ -140,6 +140,9 @@ export class EmsService {
 	) {
 		this.uncertain = uncertain;
 	}
+	invalidateDrafts() {
+		this.drafts.clear();
+	}
 	private validate(change: Change) {
 		if (change.operation === "cancel") return;
 		const { template_id, start, end, attendance, room, floor, room_type, features } = change;

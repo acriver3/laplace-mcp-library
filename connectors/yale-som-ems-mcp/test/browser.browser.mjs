@@ -249,3 +249,42 @@ void test("browser adapter exercises discovery, empty/conflicting searches and c
 		await rm(dir, { recursive: true, force: true });
 	}
 });
+
+void test("EMS renews through its sign-in link and verifies the signed-in account, even when names match", async () => {
+	const dir = await mkdtemp(join(tmpdir(), "ems-renew-"));
+	const browser = new EmsBrowser(join(dir, "profile"), "chrome");
+	let authenticated = true;
+	let email = "first@fixture.invalid";
+	const identity = '<button id="usernameid">Test Student</button><a href="Account.aspx">My Account</a>';
+	try {
+		const page = await browser.page();
+		await page.context().route("**/*", async (route) => {
+			const url = new URL(route.request().url());
+			if (url.origin !== new URL(EMS_BASE).origin) return route.abort();
+			if (url.pathname.endsWith("/Account.aspx"))
+				return route.fulfill({ contentType: "text/html", body: `<label for="email">Email Address:</label><input id="email" value="${email}">` });
+			if (url.pathname.endsWith("/SignIn.aspx")) {
+				authenticated = true;
+				return route.fulfill({
+					contentType: "text/html",
+					body: '<script>location.replace("Default.aspx")</script>',
+					headers: { "set-cookie": "FixtureSession=renewed; Path=/web; Secure; HttpOnly" },
+				});
+			}
+			return route.fulfill({
+				contentType: "text/html",
+				body: authenticated ? identity : '<button id="usernameid">Guest</button><a href="SignIn.aspx">Sign In</a>',
+				headers: authenticated ? { "set-cookie": "FixtureSession=initial; Path=/web; Secure; HttpOnly" } : {},
+			});
+		});
+		await browser.login();
+		authenticated = false;
+		assert.equal((await browser.renew()).name, "Test Student");
+		email = "second@fixture.invalid";
+		authenticated = false;
+		await assert.rejects(browser.renew(), { code: "identity_mismatch" });
+	} finally {
+		await browser.close();
+		await rm(dir, { recursive: true, force: true });
+	}
+});

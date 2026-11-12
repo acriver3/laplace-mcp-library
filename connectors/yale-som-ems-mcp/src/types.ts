@@ -117,6 +117,8 @@ export type Preview = {
 export type Prepared = { identity: string; preview: Preview };
 export interface EmsAdapter {
 	identity(): Promise<{ key: string; name: string }>;
+	renewSession?(): Promise<void>;
+	checkSession?(): Promise<void>;
 	templates(): Promise<Template[]>;
 	search(
 		input: Search,

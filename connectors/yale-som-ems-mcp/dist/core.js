@@ -115,6 +115,9 @@ export class EmsService {
         this.clearUncertain = clearUncertain;
         this.uncertain = uncertain;
     }
+    invalidateDrafts() {
+        this.drafts.clear();
+    }
     validate(change) {
         if (change.operation === "cancel")
             return;

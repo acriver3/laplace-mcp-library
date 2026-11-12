@@ -54,15 +54,14 @@ async function signIn(base) {
   const { openSession } = await import('../src/browser.js');
   say(`Opening ${base} … sign in in the browser window (SSO / MFA as usual). It closes by itself when done.`);
   const { me } = await openSession(base, { headless: false, onLoginPath: (p) => writeConfig({ loginPath: p }) });
-  writeConfig({ baseUrl: base, user: me.name, loggedInAt: new Date().toISOString() });
+  writeConfig({ baseUrl: base, sessionOrigin: base, sessionUserId: String(me.id), user: me.name, loggedInAt: new Date().toISOString() });
   say(`✓ Signed in as ${me.name}`);
   return me;
 }
 
 async function currentUser(base) {
-  const { CanvasClient } = await import('../src/canvas.js');
-  const { sessionProvider } = await import('../src/server.js');
-  return new CanvasClient({ base, session: sessionProvider(base) }).get('users/self');
+  const { connectCanvas } = await import('../src/server.js');
+  return connectCanvas(base).get('users/self');
 }
 
 async function setup() {
@@ -82,9 +81,11 @@ async function setup() {
     // Only the saved cookies are tried here (no hidden browser), so a first-time user sees
     // the sign-in window straight away.
     const { savedSession } = await import('../src/browser.js');
-    const { CanvasClient } = await import('../src/canvas.js');
+    const { connectCanvas } = await import('../src/server.js');
     const saved = savedSession(base);
-    const me = saved ? await new CanvasClient({ base, session: async () => saved }).get('users/self').catch(() => null) : null;
+    const client = connectCanvas(base, { session: async () => saved });
+    client.current = saved;
+    const me = saved ? await client.probe(saved).catch(() => null) : null;
     if (me?.name) say(`✓ Already signed in as ${me.name}\n`);
     else { await signIn(base); say(); }
   }

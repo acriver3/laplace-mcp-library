@@ -597,12 +597,21 @@ export const TOOLS = [
   },
 ];
 
-export function registerTools(server, getClient) {
+export function registerTools(server, withClient) {
   for (const t of TOOLS) {
     server.registerTool(t.name, { title: t.title, description: t.description, inputSchema: t.input, annotations: { ...(t.annotations || READ_ONLY), title: t.title } },
       async (args) => {
-        try { return await t.run(await getClient(), args || {}); }
-        catch (e) { return { isError: true, content: [{ type: 'text', text: e.message }] }; }
+        try { return await withClient((client) => t.run(client, args || {})); }
+        catch (e) {
+          const known = ['sign_in_required', 'identity_mismatch', 'rate_limited', 'transport_unavailable'].includes(e.code);
+          return {
+            isError: true, content: [{ type: 'text', text: e.message }],
+            ...(known ? { structuredContent: {
+              code: e.code,
+              ...(e.retryAfterMs ? { details: { retryAfterMs: e.retryAfterMs } } : {}),
+            } } : {}),
+          };
+        }
       });
   }
 }

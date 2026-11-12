@@ -33,31 +33,66 @@ export class BrowserAdapter implements EmsAdapter {
 		before?: Reservation;
 		reservationIds?: string[];
 	};
+	private verifiedSession?: string;
 	constructor(readonly browser: EmsBrowser) {}
 	close() {
+		this.verifiedSession = undefined;
+		this.selected = undefined;
 		this.rules.clear();
+		this.urls.clear();
 		return this.browser.close();
 	}
 	async identity() {
-		await this.goto("Default.aspx");
-		return this.browser.identity();
+		const { identity } = await this.navigate("Default.aspx");
+		return identity;
+	}
+	async checkSession() {
+		if (!this.verifiedSession) throw new EmsError("auth_required", "EMS has no verified session.");
+		try {
+			await this.browser.openHome(8_000);
+			const { key } = await this.browser.identity(5_000);
+			if (key !== this.verifiedSession)
+				throw new EmsError("identity_mismatch", "The EMS session changed. Verify it on the next use.");
+		} catch (error) {
+			if (error instanceof EmsError && ["auth_required", "identity_mismatch"].includes(error.code))
+				await this.close();
+			throw error;
+		}
+	}
+	async renewSession() {
+		try {
+			this.verifiedSession = (await this.browser.renew()).key;
+		} catch (error) {
+			await this.close();
+			throw error;
+		}
 	}
 	private async goto(path: string) {
+		return (await this.navigate(path)).page;
+	}
+	private async navigate(path: string) {
 		const url = new URL(path, EMS_BASE);
 		if (url.origin !== new URL(EMS_BASE).origin || !url.pathname.startsWith("/web/"))
 			throw new EmsError("invalid_url", "Only Yale SOM EMS pages are supported.");
 		const page = await this.browser.page();
-		await page.goto(url.href, { waitUntil: "domcontentloaded" });
 		try {
-			await this.browser.identity();
+			await this.browser.navigate(page, url.href);
+			const identity = await this.browser.identity();
+			if (this.verifiedSession !== identity.key) {
+				const expected = await this.browser.boundAccount();
+				const actual = await this.browser.accountFingerprint(page);
+				if (expected && actual !== expected)
+					throw new EmsError("identity_mismatch", "The EMS account could not be verified. Reconnect EMS.");
+				if (!expected && actual) await this.browser.bindAccount(actual);
+				this.verifiedSession = identity.key;
+			}
+			await this.settled(page);
+			return { page, identity };
 		} catch (error) {
-			// Release the profile so the separate headed login CLI can acquire it.
-			// Another account may sign in next, so drop cached template rules too.
-			await this.close();
+			if (error instanceof EmsError && ["auth_required", "identity_mismatch"].includes(error.code))
+				await this.close();
 			throw error;
 		}
-		await this.settled(page);
-		return page;
 	}
 	private async settled(page: Page) {
 		await page.waitForFunction(
