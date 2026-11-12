@@ -55,6 +55,7 @@ export function backgroundInterval(base, env = process.env) {
 export async function startServer() {
   const server = new McpServer({ name: 'canvas-session-mcp', version });
   let client;
+  let accountCheck;
   let timer;
   let active = 0;
   let stopped = false;
@@ -90,6 +91,11 @@ export async function startServer() {
     let authFailed = false;
     try {
       client ??= connectCanvas(baseUrl());
+      const config = readConfig();
+      if (config.sessionOrigin !== client.base || config.sessionUserId === undefined) {
+        accountCheck ??= client.get('users/self').finally(() => { accountCheck = undefined; });
+        await accountCheck;
+      }
       return await run(client);
     } catch (error) {
       authFailed = ['sign_in_required', 'identity_mismatch'].includes(error.code);
