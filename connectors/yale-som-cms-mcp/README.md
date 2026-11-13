@@ -1,56 +1,58 @@
-# Yale SOM CMS [Background Browser]
+# Yale SOM CMS [Tethered]
 
 Local stdio MCP for the Yale School of Management career platform at
-[https://som-yale.12twenty.com/dashboard/](https://som-yale.12twenty.com/dashboard/).
-The npm package is `@withlaplace/yale-som-cms-mcp`. The initial catalog target is
-Windows x64, with Node 24 and installed Chrome or Edge.
+[CMS](https://som-yale.12twenty.com/dashboard/). The package is
+`@withlaplace/yale-som-cms-mcp`. Version 0.1.1 targets Windows x64 with Node 24
+and a visible Chrome session. Catalog activation awaits the acceptance
+record in the [review](https://github.com/acriver3/laplace-mcp-library/blob/main/reviews/yale-som-cms-mcp.md).
 
-As of 2026-11-11, version 0.1.0 is an **unpublished candidate**. The commands below
-apply after publication; the catalog does not currently offer this candidate
-for installation. See the [candidate review](https://github.com/acriver3/laplace-mcp-library/blob/main/reviews/yale-som-cms-mcp.md)
-for completed checks and pending authenticated acceptance.
+## Connect your visible Chrome session
 
-## Sign in once, then use the background browser
+Open Chrome and enable remote debugging at `chrome://inspect/#remote-debugging`.
+Approve Chrome's connection prompt yourself. Run `login`, then complete Yale
+sign-in, MFA and any browser verification in the connector's CMS tab. Chrome
+retains your session. Keep Chrome open while using the connector.
 
-Laplace Desktop installs an exact package version with npm integrity checks.
-Authenticate opens a **visible, dedicated browser window**. Complete Yale or
-12twenty sign-in and any MFA yourself. The connector then reuses that saved
-profile in headless Chrome or Edge for normal MCP calls. Wait for the login
-command to report success and close its window before starting the server.
-Stop any process using that profile before signing in again or running a
-separate status command.
+The connector creates and controls its own CMS tab. Its connection is scoped
+to that tab and its frames; other tabs and browser-wide settings stay outside
+the connection. Closing the connector closes its own tab and disconnects.
+The user browser stays open. Login, status and serving all use visible Chrome;
+the package contains no headless serving mode.
 
-This is not a tether to your everyday Chrome tab. It does not import cookies,
-attach to your personal browser, or ask for passwords in chat. Opening CMS in
-your everyday browser helps inspect the website during development, but it
-does not authenticate this connector's separate profile.
+Local connector state contains a lock and submission journal. Browser cookies
+remain in Chrome's profile. The connector does not copy a browser profile or
+ask for passwords in chat.
 
-For direct installation and invocation:
+For manual installation, use an exact version:
 
 ```sh
-npm install --ignore-scripts @withlaplace/yale-som-cms-mcp@0.1.0
-node node_modules/@withlaplace/yale-som-cms-mcp/dist/cli.js login --profile-dir /absolute/path/to/cms/profile --browser chrome --downloads-dir /absolute/path/to/downloads
-node node_modules/@withlaplace/yale-som-cms-mcp/dist/cli.js status --profile-dir /absolute/path/to/cms/profile --browser chrome --downloads-dir /absolute/path/to/downloads
-node node_modules/@withlaplace/yale-som-cms-mcp/dist/cli.js serve --profile-dir /absolute/path/to/cms/profile --browser chrome --downloads-dir /absolute/path/to/downloads
+npm install --ignore-scripts @withlaplace/yale-som-cms-mcp@0.1.1
+node node_modules/@withlaplace/yale-som-cms-mcp/dist/cli.js login --state-dir /absolute/path/to/cms/state --cdp-url ws://127.0.0.1:9222/devtools/browser --downloads-dir /absolute/path/to/downloads
+node node_modules/@withlaplace/yale-som-cms-mcp/dist/cli.js status --state-dir /absolute/path/to/cms/state --cdp-url ws://127.0.0.1:9222/devtools/browser --downloads-dir /absolute/path/to/downloads
+node node_modules/@withlaplace/yale-som-cms-mcp/dist/cli.js serve --state-dir /absolute/path/to/cms/state --cdp-url ws://127.0.0.1:9222/devtools/browser --downloads-dir /absolute/path/to/downloads
 ```
 
 On Windows, use absolute Windows paths and quote paths containing spaces.
-Choose `msedge` for Edge. Keep the same browser channel, profile and download
-folder for all commands. The standalone defaults are:
+The standalone defaults are:
 
-- Profile: `~/.laplace-local/sessions/yale-som-cms/profile`.
+- State: `~/.laplace-local/sessions/yale-som-cms/state`.
+- Chrome connection: `ws://127.0.0.1:9222/devtools/browser` (loopback only).
 - Downloads: `~/Documents/Yale SOM CMS`.
-- Browser: `chrome`.
 - Interactive login timeout: 1,800 seconds, adjustable with
   `login --login-timeout 1..3600`.
 
-Desktop supplies its own isolated session directory. Sessions, cookies,
-submission journals and temporary upload snapshots stay outside the package.
-Do not share a profile across operating systems or run two owners at once.
-An expired session returns `auth_required`; run `login` again. Serving never
-opens an unexpected sign-in window.
+Use the same state folder for all commands and stop its server before running
+a separate login or status process. The deprecated `--profile-dir` argument
+is an alias for connector state; it never selects Chrome's user profile.
+`--browser chrome` is accepted for compatibility; Edge is not yet verified.
 
-Setup verifies `cms_session_status` and `cms_get_dashboard`. Installation,
+An expired CMS login returns `auth_required`. A Cloudflare security check
+returns `browser_challenge`: complete that check manually in the visible
+connector tab, then retry. A challenge does not establish that your Yale
+login expired. If the check loops, the connector remains unavailable and
+does not automate the challenge.
+
+Setup verifies only `cms_session_status` and `cms_get_dashboard`. Installation,
 authentication and verification do not submit applications or make bookings.
 
 ## Student areas and read tools
@@ -191,20 +193,22 @@ If a process ends during a submission, a response is lost, or verification
 fails, further writes are blocked. Read tools remain available to inspect the
 authoritative application, appointment, registration, document or profile.
 
-First stop any remaining process using the profile. Inspect the affected
-record in CMS. Then explicitly acknowledge the observed outcome locally:
+First stop any remaining connector process using the same state directory.
+Inspect the affected record in CMS. Then explicitly acknowledge the observed
+outcome locally:
 
 ```sh
-node dist/cli.js status --profile-dir /absolute/path/to/cms/profile --browser chrome --downloads-dir /absolute/path/to/downloads --acknowledge-uncertain --note "Inspected CMS: the intended registration exists with the expected slot."
+node dist/cli.js status --state-dir /absolute/path/to/cms/state --downloads-dir /absolute/path/to/downloads --acknowledge-uncertain --note "Inspected CMS: the intended registration exists with the expected slot."
 ```
 
 This records the acknowledgment; it never retries the operation or deletes the
 remote record. A corrupt journal is not automatically discarded.
 
-Normal shutdown releases profile ownership. If a crashed owner's lock remains,
-stop its remaining browser before running the same `status` command with
-`--release-stale-lock`. The command refuses to release a lock owned by a live
-process. Recovery flags are valid only with `status`.
+Normal shutdown releases connector state ownership. If a crashed owner's lock
+remains, stop any remaining connector process and inspect its old CMS tab
+before running the same `status` command with `--release-stale-lock`. Leave
+Chrome and your other tabs open. The command refuses to release a lock owned
+by a live process. Recovery flags are valid only with `status`.
 
 ## Development and validation
 
@@ -232,7 +236,7 @@ The release publisher runs the package build and `npm test`, but does not run
 separate checks for the final source before release.
 
 Passing fixtures does not establish live write acceptance. Release evidence
-must separately identify authenticated read checks, dedicated-profile login
+must separately identify authenticated read checks, existing-Chrome login
 and restart persistence, native Windows installation/Desktop setup, and any
 concrete user-approved live write checks. Unverified platforms remain
 unverified. Never submit an application or book a slot merely to test setup.

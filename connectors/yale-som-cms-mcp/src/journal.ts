@@ -48,7 +48,7 @@ export class FileJournal {
     if (!isAbsolute(profileDir))
       throw new CmsError(
         "invalid_profile",
-        "The journal requires an absolute dedicated profile directory.",
+        "The journal requires an absolute dedicated connector state directory.",
       );
     this.file = resolve(profileDir) + ".cms-journal.json";
   }

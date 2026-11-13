@@ -35,11 +35,11 @@ These pages cover Desktop and CLI installation, existing-connection reuse, authe
 | [Outlook](connectors/msoutlook-mcp/README.md) | `@withlaplace/msoutlook-mcp` | 0.5.0-laplace.2 | Windows x64, macOS Intel, macOS Apple Silicon | Node; Chrome/Edge |
 | [Slack](connectors/slack-mcp-server/README.md) | `@withlaplace/slack-mcp-server` | 1.1.0-laplace.2 | Windows x64, macOS Intel, macOS Apple Silicon, Linux x64 | Node launcher with Patchright; Go server from `@withlaplace/slack-mcp-server-<os>-<cpu>` |
 
-[Yale SOM CMS [Background Browser]](connectors/yale-som-cms-mcp/README.md) is an
-unpublished 0.1.0 candidate targeting Windows x64 with Node 24 and Chrome/Edge.
-Its catalog entry remains unavailable for installation. The
-[candidate review](reviews/yale-som-cms-mcp.md) separates synthetic/native
-validation from pending dedicated-profile authentication and live acceptance.
+[Yale SOM CMS [Tethered]](connectors/yale-som-cms-mcp/README.md) is a
+0.1.1 candidate targeting Windows x64 with Node 24 and visible Chrome.
+The 0.1.0 background-browser package was published; the current tethered
+candidate uses the user's existing Chrome session. Catalog activation awaits
+the [native acceptance review](reviews/yale-som-cms-mcp.md).
 
 Each catalog entry names the npm `package`, `distTag`, `bin`, launch `args` and
 `env`. Values may use `${user_config.<key>}` (a setting from the connector's

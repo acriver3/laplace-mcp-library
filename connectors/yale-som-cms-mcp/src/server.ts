@@ -221,7 +221,7 @@ export function createServer(
   service = new CmsService(adapter),
 ) {
   const server = new McpServer(
-    { name: "yale-som-cms-mcp", version: "0.1.0" },
+    { name: "yale-som-cms-mcp", version: "0.1.1" },
     {
       instructions:
         "Use only student capabilities available to this authenticated Yale SOM CMS account. Discover fields with cms_get_form and show the entire cms_prepare_change preview before requesting confirmation. cms_commit_change requires approval of that exact preview; confirm:true is the caller's attestation, not proof of human consent. Retain MCP client approval controls. Never automatically retry a write. An uncertain or partial result requires inspection and explicit local reconciliation. External application websites and external OAuth consent require handoff. Read cursors and truncation indicators before claiming completeness. Never infer hidden or suppressed research data.",
@@ -260,7 +260,7 @@ export function createServer(
   }
   tool(
     "cms_session_status",
-    "Verify the dedicated CMS browser login and show whether a previous submission needs reconciliation. If signed out, run local login with the same profile and browser.",
+    "Verify the existing visible Chrome session and show whether a previous submission needs reconciliation. If signed out, run local login with the same state-dir and cdp-url.",
     empty,
     readAnnotations,
     (_value, signal) => service.sessionStatus(signal),

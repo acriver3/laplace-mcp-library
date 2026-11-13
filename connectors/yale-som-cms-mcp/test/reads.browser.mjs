@@ -10,7 +10,8 @@ import {
 import { tmpdir, homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { test } from "node:test";
-import { CmsBrowser, ProfileLock } from "../dist/browser.js";
+import { ProfileLock } from "../dist/browser.js";
+import { FixtureCmsBrowser as CmsBrowser } from "./fixtures/browser.mjs";
 import { CmsReads, cmsRoute, extractReadFields } from "../dist/reads.js";
 import { CMS_ORIGIN } from "../dist/types.js";
 
@@ -79,7 +80,7 @@ test("dedicated profile ownership prevents parallel login and only releases its 
   }
 });
 
-test("headless serving validates the actual account identifier and never initiates interactive login", async () => {
+test("visible serving validates the actual account identifier and never initiates interactive login", async () => {
   await withBrowser(async (browser, page) => {
     await page.goto(CMS_ORIGIN + "/dashboard/");
     const identity = await browser.identity();
@@ -401,7 +402,7 @@ test("read records are scoped to their area and unknown details cannot be fabric
   );
 });
 
-test("closing a delayed launch retains the owner until the late browser is closed", async () => {
+test("closing a delayed attachment retains the state lease until its owned tab is closed", async () => {
   const dir = await mkdtemp(join(tmpdir(), "cms-late-launch-"));
   let launchStarted,
     releaseLaunch,
@@ -413,7 +414,7 @@ test("closing a delayed launch retains the owner until the late browser is close
     releaseLaunch = resolve;
   });
   class DelayedBrowser extends CmsBrowser {
-    async launchContext() {
+    async connectOwnedPage() {
       launchStarted();
       await gate;
       return {
@@ -433,7 +434,7 @@ test("closing a delayed launch retains the owner until the late browser is close
     releaseLaunch();
     await Promise.all([closing, rejected]);
     assert.equal(closed, 1);
-    assert.equal(browser.context, undefined);
+    assert.equal(browser.attachment, undefined);
     assert.equal(browser.currentPage, undefined);
     await assert.rejects(() => readFile(browser.lock.file), { code: "ENOENT" });
   } finally {
@@ -505,7 +506,7 @@ test("observed signed storage redirects use a fresh credential-free fetch", asyn
   }
 });
 
-test("background identity rejects an authenticated non-student account", async () => {
+test("visible identity rejects an authenticated non-student account", async () => {
   await withBrowser(async (browser, page) => {
     await page.goto(CMS_ORIGIN + "/dashboard/");
     await page.evaluate(
@@ -517,7 +518,7 @@ test("background identity rejects an authenticated non-student account", async (
   });
 });
 
-test("background Chrome keeps the request guard active against delayed preview autosaves", async () => {
+test("visible Chrome keeps the request guard active against delayed preview autosaves", async () => {
   const dir = await mkdtemp(join(tmpdir(), "cms-guard-integration-"));
   const browser = new CmsBrowser(
     join(dir, "profile"),

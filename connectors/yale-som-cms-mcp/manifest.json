@@ -1,9 +1,9 @@
 {
   "manifest_version": "0.3",
   "name": "yale-som-cms-mcp",
-  "display_name": "Yale SOM CMS [Background Browser]",
-  "version": "0.1.0",
-  "description": "Read and manage Yale SOM student career workflows through a dedicated local background browser, with confirmed changes.",
+  "display_name": "Yale SOM CMS [Tethered]",
+  "version": "0.1.1",
+  "description": "Read and manage Yale SOM student career workflows through a CMS tab in your visible Chrome session, with confirmed changes.",
   "author": {
     "name": "Laplace",
     "url": "https://github.com/acriver3/laplace-mcp-library"
@@ -21,41 +21,43 @@
       "args": [
         "${__dirname}/dist/cli.js",
         "serve",
-        "--profile-dir",
-        "${user_config.profile_dir}",
-        "--browser",
-        "${user_config.browser}",
+        "--state-dir",
+        "${user_config.state_dir}",
+        "--cdp-url",
+        "${user_config.cdp_url}",
         "--downloads-dir",
         "${user_config.downloads_dir}"
       ]
     }
   },
   "compatibility": {
-    "platforms": ["win32"],
+    "platforms": [
+      "win32"
+    ],
     "runtimes": {
       "node": ">=24"
     }
   },
   "tools_generated": true,
   "user_config": {
-    "profile_dir": {
+    "state_dir": {
       "type": "directory",
-      "title": "Dedicated Yale SOM CMS profile",
-      "description": "Private CMS browser session outside the installed package and ordinary Chrome profile.",
+      "title": "CMS connector state folder",
+      "description": "Private local lock and submission journal outside the installed package. Chrome keeps its own login cookies.",
       "required": true,
-      "default": "${HOME}/.laplace-local/sessions/yale-som-cms/profile"
+      "default": "${HOME}/.laplace-local/sessions/yale-som-cms/state"
     },
-    "browser": {
+    "cdp_url": {
       "type": "string",
-      "title": "Browser channel",
-      "description": "Installed Google Chrome or Microsoft Edge, used consistently for login and background operation.",
-      "enum": ["chrome", "msedge"],
-      "default": "chrome"
+      "title": "Local Chrome connection",
+      "description": "Loopback Chrome DevTools WebSocket endpoint. Enable remote debugging in visible Chrome and approve its connection prompt yourself.",
+      "required": true,
+      "default": "ws://127.0.0.1:9222/devtools/browser"
     },
     "downloads_dir": {
       "type": "directory",
       "title": "CMS download folder",
-      "description": "Destination for explicitly requested documents, separate from the browser profile.",
+      "description": "Destination for explicitly requested documents, separate from the connector state folder.",
       "required": true,
       "default": "${HOME}/Documents/Yale SOM CMS"
     }
@@ -63,7 +65,9 @@
   "_meta": {
     "com.withlaplace.catalog": {
       "npm_package": "@withlaplace/yale-som-cms-mcp",
-      "platforms": ["win32-x64"],
+      "platforms": [
+        "win32-x64"
+      ],
       "source_subdirectory": "connectors/yale-som-cms-mcp"
     }
   }

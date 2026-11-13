@@ -10,10 +10,17 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 
 import {
   ProfileLock,
+  DEFAULT_CDP_URL,
+  DEFAULT_STATE,
   DEFAULT_PROFILE,
   DEFAULT_DOWNLOADS,
 } from "../dist/browser.js";
-import { parseCliArgs, runCli, VERSION } from "../dist/cli.js";
+import {
+  createCliRuntime,
+  parseCliArgs,
+  runCli,
+  VERSION,
+} from "../dist/cli.js";
 import { CmsService } from "../dist/core.js";
 import { CmsError } from "../dist/types.js";
 
@@ -67,7 +74,7 @@ async function fixture(t) {
     writeOut: (text) => out.push(text),
     writeErr: (text) => err.push(text),
   };
-  const args = ["--profile-dir", profile, "--downloads-dir", downloads];
+  const args = ["--state-dir", profile, "--downloads-dir", downloads];
   return {
     dir,
     profile,
@@ -81,11 +88,12 @@ async function fixture(t) {
     args,
   };
 }
-test("CLI defaults select a dedicated saved Chrome profile and separate downloads", () => {
+test("CLI defaults tether to local Chrome and keep connector state separate from downloads", () => {
   const c = parseCliArgs([]);
   assert.equal(c.command, "serve");
-  assert.equal(c.browser, "chrome");
-  assert.equal(c.profileDir, DEFAULT_PROFILE);
+  assert.equal(c.cdpUrl, DEFAULT_CDP_URL);
+  assert.equal(c.stateDir, DEFAULT_STATE);
+  assert.equal(DEFAULT_PROFILE, DEFAULT_STATE);
   assert.equal(c.downloadsDir, DEFAULT_DOWNLOADS);
   assert.equal(c.loginTimeoutMs, 1800000);
 });
@@ -94,15 +102,23 @@ test("CLI help and version do not construct or authenticate a browser", async (t
   assert.equal(await runCli(["--help"], f.dependencies), 0);
   assert.equal(await runCli(["--version"], f.dependencies), 0);
   assert.deepEqual(f.calls, []);
-  assert.match(f.out[0], /visible dedicated/);
+  assert.match(f.out[0], /Attach to visible Chrome/);
+  assert.match(f.out[0], /closes only the connector.s CMS tab/);
+  assert.match(f.out[0], /does not launch\nChrome or copy cookies/);
+  assert.doesNotMatch(f.out[0], /headless|background-browser/);
   assert.equal(f.out[1], VERSION);
 });
-test("CLI rejects unsupported browsers, attachment flags, relative folders, and unsafe recovery options", async (t) => {
+test("CLI rejects unsupported browsers, launch flags, relative folders, and unsafe recovery options", async (t) => {
   const f = await fixture(t);
   for (const args of [
     ["other"],
     ["serve", "extra"],
     ["serve", "--browser", "firefox"],
+    ["serve", "--browser", "msedge"],
+    ["serve", "--state-dir", "relative"],
+    ["serve", "--state-dir", f.profile, "--profile-dir", f.profile],
+    ["serve", "--headless"],
+    ["serve", "--headed"],
     ["serve", "--cdp", "9222"],
     ["serve", "--profile-dir", "relative"],
     ["serve", "--downloads-dir", "relative"],
@@ -135,7 +151,16 @@ test("manual login passes only the bounded timeout and prints sanitized identity
   const f = await fixture(t),
     before = process.listenerCount("SIGINT");
   const code = await runCli(
-    ["login", ...f.args, "--browser", "msedge", "--login-timeout", "60"],
+    [
+      "login",
+      ...f.args,
+      "--browser",
+      "chrome",
+      "--cdp-url",
+      "ws://localhost:9223/devtools/browser/example-id",
+      "--login-timeout",
+      "60",
+    ],
     f.dependencies,
   );
   assert.equal(code, 0);
@@ -147,13 +172,18 @@ test("manual login passes only the bounded timeout and prints sanitized identity
     (x) => Array.isArray(x) && x[0] === "runtime",
   )[1];
   assert.equal(configuration.command, "login");
-  assert.equal(configuration.browser, "msedge");
-  assert.match(f.err[0], /visible dedicated browser/);
+  assert.equal(
+    configuration.cdpUrl,
+    "ws://localhost:9223/devtools/browser/example-id",
+  );
+  assert.equal(configuration.stateDir, f.profile);
+  assert.equal(Object.hasOwn(configuration, "browser"), false);
+  assert.match(f.err[0], /existing visible Chrome/);
   assert.equal(JSON.parse(f.out[0]).account, "Fixture Student");
   assert.equal(f.out[0].includes("secret"), false);
   assert.equal(process.listenerCount("SIGINT"), before);
 });
-test("status acquires the profile lock before reading account and recovery state", async (t) => {
+test("status acquires the connector state lock before reading account and recovery state", async (t) => {
   const f = await fixture(t);
   assert.equal(
     await runCli(["status", ...f.args, "--release-stale-lock"], f.dependencies),
@@ -259,12 +289,18 @@ test("invalid command exits nonzero with structured stderr and clean stdout", ()
   assert.equal(result.stdout, "");
   assert.equal(JSON.parse(result.stderr).code, "invalid_arguments");
 });
-test("the actual CLI serves stdio discovery without launching a browser and exits on input close", async (t) => {
+test("the actual CLI serves stdio discovery without attaching to Chrome and exits on input close", async (t) => {
   const f = await fixture(t);
   const client = new Client({ name: "cli-fixture", version: "1" });
   const transport = new StdioClientTransport({
     command: process.execPath,
-    args: [resolve("dist/cli.js"), "serve", ...f.args],
+    args: [
+      resolve("dist/cli.js"),
+      "serve",
+      ...f.args,
+      "--cdp-url",
+      "ws://127.0.0.1:1/devtools/browser",
+    ],
     stderr: "pipe",
   });
   t.after(() => client.close());
@@ -278,15 +314,119 @@ test("manifest identity and setup arguments match CLI and keep downloads separat
   const manifest = JSON.parse(await readFile(resolve("manifest.json"), "utf8"));
   assert.equal(manifest.name, "yale-som-cms-mcp");
   assert.equal(manifest.version, VERSION);
-  assert.equal(manifest.display_name, "Yale SOM CMS [Background Browser]");
+  assert.equal(manifest.display_name, "Yale SOM CMS [Tethered]");
   assert.deepEqual(manifest.compatibility.platforms, ["win32"]);
   assert.deepEqual(manifest._meta["com.withlaplace.catalog"].platforms, [
     "win32-x64",
   ]);
   const args = manifest.server.mcp_config.args;
-  assert.ok(args.includes("--profile-dir"));
-  assert.ok(args.includes("--browser"));
+  assert.ok(args.includes("--state-dir"));
+  assert.ok(args.includes("--cdp-url"));
+  assert.ok(!args.includes("--profile-dir"));
+  assert.ok(!args.includes("--browser"));
   assert.ok(args.includes("--downloads-dir"));
-  assert.equal(manifest.user_config.browser.default, "chrome");
+  assert.equal(manifest.user_config.cdp_url.default, DEFAULT_CDP_URL);
   assert.ok(!JSON.stringify(manifest).includes("yale-som-ems"));
+});
+
+test("bounded status closes only its owned tab and explains challenge recovery without claiming expiry", async (t) => {
+  const f = await fixture(t);
+  f.adapter.identity = async () => {
+    throw new CmsError(
+      "browser_challenge",
+      "The saved login may still be valid.",
+      { provider: "cloudflare", saved_login_status: "unknown" },
+    );
+  };
+  assert.equal(await runCli(["status", ...f.args], f.dependencies), 1);
+  assert.equal(f.out.length, 0);
+  assert.equal(f.err.length, 1);
+  const result = JSON.parse(f.err[0]);
+  assert.equal(result.code, "browser_challenge");
+  assert.equal(result.details.saved_login_status, "unknown");
+  assert.match(result.message, /saved login may still be valid/);
+  assert.match(result.message, /closes only its CMS tab/);
+  assert.match(result.message, /Chrome and your other tabs remain open/);
+  assert.match(result.message, /Run login to complete checks manually/);
+  assert.ok(f.calls.includes("close"));
+});
+
+test("deprecated profile-dir names connector state only and chrome compatibility does not select a launch channel", async (t) => {
+  const f = await fixture(t);
+  const c = parseCliArgs([
+    "status",
+    "--profile-dir",
+    f.profile,
+    "--browser",
+    "chrome",
+    "--downloads-dir",
+    f.downloads,
+  ]);
+  assert.equal(c.stateDir, f.profile);
+  assert.equal(c.cdpUrl, DEFAULT_CDP_URL);
+  assert.equal(Object.hasOwn(c, "profileDir"), false);
+  assert.equal(Object.hasOwn(c, "browser"), false);
+});
+
+test("CLI accepts only explicit-port loopback Chrome browser WebSocket endpoints", () => {
+  for (const endpoint of [
+    "ws://127.0.0.1:9222/devtools/browser",
+    "ws://localhost:80/devtools/browser",
+    "ws://localhost:9223/devtools/browser/example-id_123",
+    "ws://[::1]:65535/devtools/browser/123-456",
+  ]) {
+    assert.equal(parseCliArgs(["--cdp-url", endpoint]).cdpUrl, endpoint);
+  }
+  for (const endpoint of [
+    "ws://example.com:9222/devtools/browser",
+    "ws://localhost.example.com:9222/devtools/browser",
+    "ws://127.0.0.2:9222/devtools/browser",
+    "ws://2130706433:9222/devtools/browser",
+    "ws://0x7f000001:9222/devtools/browser",
+    "ws://127.1:9222/devtools/browser",
+    "ws://0177.0.0.1:9222/devtools/browser",
+    "ws://[::ffff:127.0.0.1]:9222/devtools/browser",
+    "ws://localhost/devtools/browser",
+    "ws://localhost:0/devtools/browser",
+    "ws://localhost:65536/devtools/browser",
+    "ws://localhost.:9222/devtools/browser",
+    "ws://user:secret@localhost:9222/devtools/browser",
+    "ws://localhost:9222/devtools/browser?",
+    "ws://localhost:9222/devtools/browser?token=secret",
+    "ws://localhost:9222/devtools/browser#",
+    "ws://localhost:9222/devtools/browser#secret",
+    "ws://localhost:9222/devtools/browser/",
+    "ws://localhost:9222/devtools/browser/../browser",
+    "ws://localhost:9222/devtools/browser/%69d",
+    "ws://localhost:9222/devtools/page/id",
+    "wss://localhost:9222/devtools/browser",
+    "http://localhost:9222/devtools/browser",
+    " ws://localhost:9222/devtools/browser",
+    "ws://localhost:9222/devtools/browser\n",
+  ]) {
+    assert.throws(
+      () => parseCliArgs(["--cdp-url", endpoint]),
+      (e) => e.code === "invalid_arguments" && !e.message.includes("secret"),
+      endpoint,
+    );
+  }
+});
+
+test("runtime wires state, endpoint and login permission without connecting or launching Chrome", async (t) => {
+  const f = await fixture(t);
+  for (const command of ["login", "status", "serve"]) {
+    const c = parseCliArgs([
+      command,
+      ...f.args,
+      "--cdp-url",
+      "ws://127.0.0.1:1/devtools/browser",
+    ]);
+    const runtime = createCliRuntime(c);
+    assert.equal(runtime.browser.stateDir, f.profile);
+    assert.equal(runtime.browser.profile, f.profile);
+    assert.equal(runtime.browser.cdpUrl, c.cdpUrl);
+    assert.equal(runtime.browser.interactiveLogin, command === "login");
+    assert.equal(runtime.browser.downloadsDir, f.downloads);
+    await runtime.adapter.close();
+  }
 });

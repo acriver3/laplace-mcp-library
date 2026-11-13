@@ -1,6 +1,6 @@
 import type { Locator, Page, Request, Response } from "playwright-core";
 
-import { isReadRequest } from "./browser.js";
+import { isReadRequest, isInfrastructureRequest } from "./browser.js";
 import { CMS_ORIGIN, CmsError } from "./types.js";
 
 export interface CompletionOptions {
@@ -61,7 +61,8 @@ export async function observeCompletion<T>(
     const url = new URL(request.url());
     if (
       url.origin !== CMS_ORIGIN ||
-      isReadRequest(request.method(), request.url())
+      isReadRequest(request.method(), request.url()) ||
+      isInfrastructureRequest(request.method(), request.url())
     )
       return;
     pending.add(request);

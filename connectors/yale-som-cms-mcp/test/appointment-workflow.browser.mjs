@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { CmsBrowser } from "../dist/browser.js";
+import { FixtureCmsBrowser as CmsBrowser } from "./fixtures/browser.mjs";
 import { CMS_ORIGIN } from "../dist/types.js";
 import {
   appointmentSlotId,

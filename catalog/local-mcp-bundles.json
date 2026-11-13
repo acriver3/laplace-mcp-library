@@ -234,8 +234,8 @@
   },
   {
     "id": "yale-som-cms-mcp",
-    "name": "Yale SOM CMS [Background Browser]",
-    "description": "Read Yale SOM career information, download resources and confirm student career changes using your dedicated CMS browser login.",
+    "name": "Yale SOM CMS [Tethered]",
+    "description": "Read Yale SOM career information, download resources and confirm student career changes through a CMS tab in your visible Chrome session.",
     "capabilities": [
       "Read career dashboard, jobs, employers, events and resources",
       "Read applications, appointments, documents and profile",
@@ -243,30 +243,31 @@
       "Download career resources locally"
     ],
     "repository": "https://github.com/acriver3/laplace-mcp-library",
-    "upstreamVersion": "0.1.0",
-    "version": "0.1.0",
+    "upstreamVersion": "0.1.1",
+    "version": "0.1.1",
     "license": "MIT",
     "recipe": "yale-som-cms",
     "patches": [],
-    "reviewedAt": "2026-11-10",
+    "reviewedAt": "2026-11-11",
     "reviewEvidence": [
       "reviews/yale-som-cms-mcp.md"
     ],
     "reviewNotes": [
-      "Candidate for the Yale SOM 12twenty student career portal at https://som-yale.12twenty.com/dashboard/.",
-      "Uses a visible dedicated Chrome/Edge login and saves its profile for headless background use; never imports ordinary browser cookies or tethers to an existing tab.",
+      "Connects to the Yale SOM 12twenty student career portal at https://som-yale.12twenty.com/dashboard/.",
+      "Tethers to an existing visible Chrome session through a local connection scoped to its own CMS tab. It never launches headless Chrome, imports cookies or closes the user browser.",
       "Student career changes require a complete preview and explicit confirmation. Setup checks only session status and the dashboard.",
-      "Automated fixtures are recorded separately from live acceptance. Native Windows student-account acceptance and npm publication are pending. Other platforms are not offered until tested."
+      "Automated fixtures are recorded separately from live acceptance. Catalog activation awaits native Windows acceptance of the tethered release. Other platforms remain unverified."
     ],
     "prerequisites": [
       "Laplace Local and its included Node 24 runtime",
-      "Installed Chrome or Edge",
-      "A Yale SOM CMS student account",
-      "Dedicated profile and download directories outside the installed package"
+      "Visible Chrome with remote debugging enabled at chrome://inspect/#remote-debugging",
+      "A Yale SOM CMS student account signed in through Chrome",
+      "Private connector state and download directories outside the installed package"
     ],
     "authentication": [
-      "Run login and complete Yale SSO/MFA yourself in the visible dedicated Chrome or Edge window.",
-      "Background calls reuse the saved profile headlessly with the same browser channel and download directory. If login expires, run login again."
+      "Open visible Chrome, enable remote debugging at chrome://inspect/#remote-debugging and approve Chrome connection prompts yourself.",
+      "Run login and complete Yale sign-in, MFA and any browser verification in the connector-owned CMS tab. Chrome retains the session.",
+      "Keep Chrome open. Connected calls use an isolated CMS tab; other tabs and browser-wide settings remain unchanged."
     ],
     "sourceDirectory": "connectors/yale-som-cms-mcp",
     "npm": {
@@ -275,10 +276,10 @@
       "bin": "yale-som-cms-mcp",
       "args": [
         "serve",
-        "--profile-dir",
-        "${user_config.profile_dir}",
-        "--browser",
-        "${user_config.browser}",
+        "--state-dir",
+        "${user_config.state_dir}",
+        "--cdp-url",
+        "${user_config.cdp_url}",
         "--downloads-dir",
         "${user_config.downloads_dir}"
       ],
@@ -291,7 +292,7 @@
     "candidate": true,
     "acceptance": [],
     "setupUrl": "https://connect.laplaceop.com/local-mcp/setup/yale-som-cms-mcp",
-    "browserMode": "background-browser"
+    "browserMode": "tethered"
   },
   {
     "id": "msoutlook-mcp",

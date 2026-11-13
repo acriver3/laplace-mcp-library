@@ -3,12 +3,11 @@ import { mkdir, open, readFile, realpath, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  chromium,
-  type BrowserContext,
-  type Page,
-  type Route,
-} from "playwright-core";
+import { type Page, type Route, type Request } from "playwright-core";
+import { connectOwnedPage, DEFAULT_CDP_URL, validateCdpUrl, type OwnedPageConnection } from "./tether.js";
+export { DEFAULT_CDP_URL, validateCdpUrl } from "./tether.js";
+import { installTransportGuard } from "./transport-guard.js";
+import { SessionBinding } from "./session-binding.js";
 import {
   CMS_ORIGIN,
   DASHBOARD,
@@ -17,10 +16,12 @@ import {
   type Identity,
 } from "./types.js";
 
-export const DEFAULT_PROFILE = resolve(
+export const DEFAULT_STATE = resolve(
   homedir(),
-  ".laplace-local/sessions/yale-som-cms/profile",
+  ".laplace-local/sessions/yale-som-cms/state",
 );
+/** Deprecated name: this is local connector state, never a Chrome profile. */
+export const DEFAULT_PROFILE = DEFAULT_STATE;
 export const DEFAULT_DOWNLOADS = resolve(homedir(), "Documents/Yale SOM CMS");
 const isInside = (parent: string, path: string) => {
   const rel = relative(parent, path);
@@ -47,7 +48,7 @@ export class ProfileLock {
       if ((error as NodeJS.ErrnoException).code === "EEXIST")
         throw new CmsError(
           "profile_busy",
-          "The CMS profile is owned by another process. Stop that process and its browser before releasing a stale lock.",
+          "The CMS state directory is in use by another connector process. Stop that process before releasing a stale lock.",
         );
       throw error;
     }
@@ -89,7 +90,7 @@ export class ProfileLock {
       process.kill(owner.pid, 0);
       throw new CmsError(
         "profile_busy",
-        "The CMS profile owner is still running.",
+        "The CMS connector state owner is still running.",
       );
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
@@ -140,26 +141,89 @@ export function isReadRequest(method: string, requestUrl: string): boolean {
   );
 }
 
-/** Installed for the lifetime of a headless context, including after a preview ends. */
+const CHALLENGE_PATH = "/cdn-cgi/challenge-platform/";
+const CHALLENGE_ORIGIN = "https://challenges.cloudflare.com";
+
+/** Cloudflare serves reserved challenge infrastructure on the tenant and its own host.
+ * https://developers.cloudflare.com/fundamentals/reference/cdn-cgi-endpoint/
+ * https://developers.cloudflare.com/turnstile/reference/content-security-policy/
+ * Let the browser run its supplied scripts normally; this does not solve interactive
+ * challenges, forge clearance, or authorize any student-data endpoint. The route is
+ * passed through unchanged, so the browser retains normal origin/cookie isolation.
+ */
+export function isInfrastructureRequest(method: string, requestUrl: string): boolean {
+  if (!["GET", "HEAD", "OPTIONS", "POST"].includes(method.toUpperCase())) return false;
+  try {
+    const url = new URL(requestUrl);
+    if (
+      ![CMS_ORIGIN, CHALLENGE_ORIGIN].includes(url.origin) ||
+      url.username ||
+      url.password ||
+      !url.pathname.startsWith(CHALLENGE_PATH)
+    )
+      return false;
+    // Inspect before URL normalization as well: encoded separators and dot segments
+    // must never escape the reserved subtree after an intermediary decodes the URL.
+    const rawPath = requestUrl.match(/^https:\/\/[^/?#]+(\/[^?#]*)?(?:[?#]|$)/i)?.[1];
+    if (!rawPath?.startsWith(CHALLENGE_PATH)) return false;
+    const decoded = decodeURIComponent(rawPath);
+    return (
+      decoded.startsWith(CHALLENGE_PATH) &&
+      !decoded.includes("\\") &&
+      !decoded.includes("%") &&
+      !decoded.split("/").some((part) => part === "." || part === "..")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function requestErrorPath(url: URL): string {
+  const path = url.pathname.toLowerCase();
+  // The suffix contains transient challenge identifiers. Never return it in a
+  // tool error, including when an unsupported method or malformed path is denied.
+  return path.startsWith("/cdn-cgi/challenge-platform") ? CHALLENGE_PATH + "[redacted]" : path;
+}
+
+/** Installed for every status/serve context, including after a preview ends. */
 export class ReadRequestGuard {
   private mutationActive = false;
+  private unsafeFailure?: unknown;
   private blocked = new Map<string, { method: string; path: string }>();
+  constructor(private readonly beforeUnsafeRequest?: (request: Request) => Promise<void>) {}
   async handle(route: Route) {
     const request = route.request();
     const method = request.method().toUpperCase();
     const url = new URL(request.url());
-    if (isReadRequest(method, url.href)) return route.fallback();
+    if (isReadRequest(method, url.href) || isInfrastructureRequest(method, request.url()))
+      return route.fallback();
     const sameTenant = url.origin === CMS_ORIGIN;
-    const path = url.pathname.toLowerCase();
-    if (sameTenant && this.mutationActive) return route.fallback();
+    const path = requestErrorPath(url);
+    if (sameTenant && this.mutationActive) {
+      try {
+        if (this.unsafeFailure) return route.abort("blockedbyclient");
+        await this.beforeUnsafeRequest?.(request);
+        if (this.unsafeFailure || !this.mutationActive) {
+          if (!this.mutationActive) this.blocked.set(method + " " + path, { method, path });
+          return route.abort("blockedbyclient");
+        }
+        return route.fallback();
+      } catch (error) {
+        this.unsafeFailure ??= error;
+        return route.abort("blockedbyclient");
+      }
+    }
     // Third-party telemetry is blocked silently. An unknown CMS request must be
     // reviewed explicitly; strip query strings and never inspect auth headers/body.
     if (sameTenant) this.blocked.set(method + " " + path, { method, path });
     return route.abort("blockedbyclient");
   }
   assertReadRequests() {
+    const failure = this.unsafeFailure;
+    this.unsafeFailure = undefined;
     const requests = [...this.blocked.values()];
     this.blocked.clear();
+    if (failure) throw failure;
     if (requests.length)
       throw new CmsError(
         "read_request_unreviewed",
@@ -179,34 +243,39 @@ export class ReadRequestGuard {
       return await callback();
     } finally {
       this.mutationActive = false;
+      this.assertReadRequests();
     }
   }
 }
 
 export class CmsBrowser {
   readonly profile: string;
+  readonly stateDir: string;
   readonly downloadsDir: string;
   readonly lock: ProfileLock;
   private readonly packageRoot = resolve(
     dirname(fileURLToPath(import.meta.url)),
     "..",
   );
-  private context?: BrowserContext;
-  private readonly readGuard = new ReadRequestGuard();
+  private attachment?: OwnedPageConnection;
+  private readonly sessionBinding = new SessionBinding(() => this.page());
+  private readonly readGuard = new ReadRequestGuard(request => this.sessionBinding.assertRequest(request));
   private currentPage?: Page;
+  private browserChallenge = false;
+  private unsupportedTransports = new Set<string>();
   private opening?: Promise<Page>;
   private closing?: Promise<void>;
   private generation = 0;
   private names = new Map<string, string>();
   constructor(
-    profileDir = DEFAULT_PROFILE,
-    readonly channel: "chrome" | "msedge" = "chrome",
-    readonly headed = false,
+    stateDir = DEFAULT_STATE,
+    readonly cdpUrl = DEFAULT_CDP_URL,
+    readonly interactiveLogin = false,
     downloadsDir = DEFAULT_DOWNLOADS,
   ) {
-    if (!["chrome", "msedge"].includes(channel))
-      throw new CmsError("invalid_browser", "Choose chrome or msedge.");
-    this.profile = resolve(profileDir);
+    this.cdpUrl = validateCdpUrl(cdpUrl);
+    this.stateDir = resolve(stateDir);
+    this.profile = this.stateDir;
     this.downloadsDir = resolve(downloadsDir);
     if (
       isInside(this.packageRoot, this.profile) ||
@@ -218,7 +287,7 @@ export class CmsBrowser {
     )
       throw new CmsError(
         "invalid_profile",
-        "Choose a dedicated CMS profile outside the installed package and everyday browser profiles.",
+        "Choose a dedicated local state directory outside the installed package and Chrome profiles.",
       );
     this.lock = new ProfileLock(this.profile);
   }
@@ -232,20 +301,12 @@ export class CmsBrowser {
       });
     return this.opening;
   }
-  protected async launchContext(): Promise<BrowserContext> {
-    return chromium.launchPersistentContext(this.profile, {
-      channel: this.channel,
-      headless: !this.headed,
-      viewport: { width: 1440, height: 1000 },
-      timezoneId: TIMEZONE,
-      serviceWorkers: "block",
-      acceptDownloads: true,
-      timeout: 30_000,
-    });
+  protected async connectOwnedPage(): Promise<OwnedPageConnection> {
+    return connectOwnedPage(this.cdpUrl, !this.interactiveLogin);
   }
   private async open(): Promise<Page> {
     const generation = this.generation;
-    let context: BrowserContext | undefined;
+    let attachment: OwnedPageConnection | undefined;
     let ancestor = this.profile;
     while (true) {
       try {
@@ -272,52 +333,62 @@ export class CmsBrowser {
     )
       throw new CmsError(
         "invalid_profile",
-        "The resolved CMS profile must be dedicated and outside the installed package and everyday browser profiles.",
+        "The resolved CMS state directory must be outside the installed package and Chrome profiles.",
       );
     await this.lock.acquire();
     try {
       await mkdir(this.profile, { recursive: true, mode: 0o700 });
-      context = await this.launchContext();
+      await this.attachment?.close();
+      this.attachment = undefined;
+      this.currentPage = undefined;
+      this.unsupportedTransports.clear();
+      attachment = await this.connectOwnedPage();
       if (generation !== this.generation)
-        throw new CmsError(
-          "browser_closed",
-          "CMS browser startup was cancelled.",
-        );
-      this.context = context;
-      if (!this.headed)
-        await this.context.route("**/*", (route) =>
-          this.readGuard.handle(route),
-        );
-      this.context.setDefaultTimeout(15_000);
-      this.context.setDefaultNavigationTimeout(30_000);
-      this.currentPage =
-        this.context.pages()[0] || (await this.context.newPage());
-      for (const page of this.context.pages())
-        if (page !== this.currentPage)
-          await page.close({ runBeforeUnload: false });
+        throw new CmsError("browser_closed", "CMS browser attachment was cancelled.");
+      this.attachment = attachment;
+      this.currentPage = attachment.page;
+      if (!this.interactiveLogin) {
+        await this.currentPage.route("**/*", (route) => this.readGuard.handle(route));
+        await installTransportGuard(this.currentPage,transport=>this.unsupportedTransports.add(transport));
+      }
+      this.currentPage.setDefaultTimeout(15_000);
+      this.currentPage.setDefaultNavigationTimeout(30_000);
       if (generation !== this.generation)
-        throw new CmsError(
-          "browser_closed",
-          "CMS browser startup was cancelled.",
-        );
+        throw new CmsError("browser_closed", "CMS browser attachment was cancelled.");
       this.currentPage.on("dialog", (dialog) => {
         void dialog.dismiss().catch(() => {});
       });
+      this.browserChallenge = false;
+      const page = this.currentPage;
+      // Cloudflare documents this header for every Challenge Page type. Observe
+      // only main-document navigations: a challenged iframe or API response does
+      // not establish that the current CMS page is blocked.
+      // https://developers.cloudflare.com/cloudflare-challenges/challenge-types/challenge-pages/detect-response/
+      page.on("response", (response) => {
+        const request = response.request();
+        if (
+          page !== this.currentPage ||
+          !request.isNavigationRequest() ||
+          request.frame() !== page.mainFrame()
+        )
+          return;
+        this.browserChallenge = response.headers()["cf-mitigated"] === "challenge";
+      });
       return this.currentPage;
     } catch (error) {
-      if (this.context === context) {
-        this.context = undefined;
+      if (this.attachment === attachment) {
+        this.attachment = undefined;
         this.currentPage = undefined;
       }
       try {
-        await context?.close();
+        await attachment?.close();
       } finally {
         await this.lock.release();
       }
       if (error instanceof CmsError) throw error;
       throw new CmsError(
         "browser_unavailable",
-        "Could not launch the dedicated CMS browser. Install the selected Chrome/Edge channel and stop other processes using this profile.",
+        "Could not attach to your existing Chrome. Keep Chrome open with its local debugging connection enabled, then retry.",
       );
     }
   }
@@ -325,17 +396,37 @@ export class CmsBrowser {
     this.readGuard.assertReadRequests();
   }
   async runMutation<T>(callback: () => Promise<T>): Promise<T> {
-    return this.readGuard.runMutation(callback);
+    await this.sessionBinding.begin();
+    try {
+      return await this.readGuard.runMutation(callback);
+    } finally {
+      this.sessionBinding.end();
+    }
+  }
+  assertSupportedTransports() {
+    const transports = new Set([...this.unsupportedTransports, ...(this.attachment?.unsupportedTransports?.() || [])]);
+    if(transports.size)
+      throw new CmsError("unsupported_transport","This CMS operation requires a browser channel that cannot be safely isolated to the connector's tab. Complete it manually in CMS.",{transports:[...transports].sort()});
+  }
+  private assertNoBrowserChallenge() {
+    if (this.browserChallenge)
+      throw new CmsError(
+        "browser_challenge",
+        "Cloudflare returned a browser challenge before CMS could verify the saved session. The saved login may still be valid. Complete the check yourself in the visible connector browser, then retry while that window is open. If the site continues to block access, use CMS manually or ask Yale/12twenty for supported access.",
+        { provider: "cloudflare", saved_login_status: "unknown" },
+      );
   }
   async identity(): Promise<Identity> {
     const page = await this.page();
     if (page.url() === "about:blank")
       await page.goto(DASHBOARD, { waitUntil: "domcontentloaded" });
-    if (new URL(page.url()).origin !== CMS_ORIGIN)
+    if (new URL(page.url()).origin !== CMS_ORIGIN) {
+      this.assertNoBrowserChallenge();
       throw new CmsError(
         "auth_required",
-        "Run login with this same profile and browser, complete Yale/12twenty sign-in yourself, then restart the server.",
+        "Complete Yale/12twenty sign-in yourself in Chrome, then retry. Run login to open a connector-owned CMS tab if needed.",
       );
+    }
     await page
       .waitForFunction(
         () =>
@@ -345,6 +436,7 @@ export class CmsBrowser {
         { timeout: 10_000 },
       )
       .catch(() => {});
+    this.assertNoBrowserChallenge();
     const found = await page.evaluate(() => {
       const user = (window as any).TT?.CurrentSession?.CurrentUser;
       if (
@@ -368,30 +460,32 @@ export class CmsBrowser {
         : "";
       return { id: String(user.Id), name, type: user.TypeId };
     });
-    if (!found)
+    if (!found) {
+      this.assertSupportedTransports();
       throw new CmsError(
         "auth_required",
-        "The CMS session expired or sign-in is incomplete. Run login with this same dedicated profile and complete Yale/12twenty sign-in yourself.",
+        "The attached Chrome session is not signed in to CMS. Complete Yale/12twenty sign-in yourself in the connector's tab, then retry.",
       );
+    }
     if (found.type !== 2)
       throw new CmsError(
         "account_not_student",
-        "Use a Yale SOM student account. Employer and administrator actions are outside this connector.",
+        "Use a Yale SOM student account in the attached Chrome session. Employer and administrator actions are outside this connector.",
       );
     if (found.name) this.names.set(found.id, found.name);
     return {
-      key: createHash("sha256")
+      key: await this.sessionBinding.identityKey(createHash("sha256")
         .update(`${CMS_ORIGIN}\n${found.id}`)
-        .digest("hex"),
+        .digest("hex")),
       account_id: found.id,
       name: this.names.get(found.id) || `Yale SOM account ${found.id}`,
     };
   }
   async login(timeoutMs = 1_800_000): Promise<Identity> {
-    if (!this.headed)
+    if (!this.interactiveLogin)
       throw new CmsError(
         "interactive_login_required",
-        "Login requires the headed login command. Serving always uses the saved profile headlessly.",
+        "Interactive sign-in is available only through the explicit login command. Status and serving use a visible browser with student writes guarded.",
       );
     if (
       !Number.isFinite(timeoutMs) ||
@@ -414,6 +508,7 @@ export class CmsBrowser {
         { timeout: timeoutMs },
       );
     } catch {
+      this.assertNoBrowserChallenge();
       throw new CmsError(
         "auth_required",
         "Interactive sign-in did not finish. Run login again when ready to complete Yale/12twenty sign-in.",
@@ -429,14 +524,17 @@ export class CmsBrowser {
     const opening = this.opening;
     this.generation++;
     this.closing = (async () => {
-      // A late launch closes its own context before releasing the profile owner.
+      // A late attachment closes only its owned tab before releasing the state lease.
       await opening?.catch(() => {});
-      const context = this.context;
-      this.context = undefined;
+      const attachment = this.attachment;
+      this.attachment = undefined;
       this.currentPage = undefined;
+      this.browserChallenge = false;
+      this.unsupportedTransports.clear();
+      this.sessionBinding.clear();
       this.names.clear();
       try {
-        await context?.close();
+        await attachment?.close();
       } finally {
         await this.lock.release();
       }

@@ -1,27 +1,59 @@
-# Yale SOM CMS 0.1.0 candidate review
+# Yale SOM CMS [Tethered] 0.1.1 candidate review
 
-This first-party package connects a Yale SOM student account to the career
-platform at https://som-yale.12twenty.com/dashboard/. Its canonical source is
-`connectors/yale-som-cms-mcp` in this repository, licensed under MIT. It is not
-a Yale or 12twenty product and does not reuse third-party connector source.
+This first-party MIT package connects a Yale SOM student account to
+https://som-yale.12twenty.com/dashboard/. Its canonical source is
+`connectors/yale-som-cms-mcp`. It is not a Yale or 12twenty product.
 
-The npm identity is `@withlaplace/yale-som-cms-mcp@0.1.0`. The initial catalog
-target is Windows x64 with Node 24 and installed Chrome or Edge. The entry is
-an unpublished candidate with an empty acceptance list. Platform availability
-is an intended release target, not a claim that native acceptance passed.
+The current npm identity is `@withlaplace/yale-som-cms-mcp@0.1.1`, targeting
+Windows x64, Node 24 and visible Chrome. The catalog remains an unpublished
+candidate with an empty acceptance list until final native verification.
 
-## Authentication and scope
+## Authentication and connection
 
-The user completes Yale/12twenty sign-in and MFA in a visible, dedicated
-browser. Normal MCP calls reopen that saved profile headlessly. The connector
-does not import cookies or attach to an ordinary Chrome tab. When the session
-expires, the user must run login again.
+The connector attaches to the user's existing visible Chrome session through
+Chrome's loopback DevTools connection. The user enables remote debugging at
+`chrome://inspect/#remote-debugging` and approves Chrome's native connection
+prompt. Login opens a connector-owned CMS tab for manual Yale sign-in, MFA
+and browser verification. Chrome retains the authenticated session.
 
-The agreed CLI contract is `serve|login|status --profile-dir <absolute-path>
---browser chrome|msedge --downloads-dir <absolute-path>`. The browser profile,
-download directory and browser channel remain consistent between commands.
-Profile data and submission journals remain outside the installed package;
-downloads are written only to the selected local download directory.
+A private local gateway exposes only the connector-owned tab and its child
+sessions to Playwright. Other tabs, Chrome-wide settings and global storage
+mutations are excluded. Shutdown closes only that owned tab and disconnects;
+it leaves Chrome running. Production code never launches a browser or runs
+headless Chrome. Read and preview traffic remains guarded on the owned tab.
+Browser challenge traffic is restricted to documented Cloudflare origins
+and paths and never counts as evidence of a student submission.
+
+The CLI contract is `serve|login|status --state-dir <absolute-path>
+--cdp-url ws://127.0.0.1:9222/devtools/browser --downloads-dir <absolute-path>`.
+CDP endpoints require an explicit port, a loopback host and the browser
+WebSocket path; credentials, queries, fragments and remote hosts are rejected.
+`--profile-dir` is a deprecated state-folder alias. The state folder stores
+a lock and submission journal, outside the installed package. Cookies remain
+in Chrome. No profile import or credential export is required.
+
+## Release history and live findings
+
+Version 0.1.0 was published from
+`79630cf303608c4e71b05367dbcd793f29d0cb8a` on 2026-11-11. The registry integrity
+matched the publisher artifact:
+`sha512-nSmpu8y0LBXWk6QCRoM684O6JGpNLCmA0sc/kUy++yYGChs51mS/aCwvgPJH2P27GWCVFOYkfTLqk3UCJynsIw==`.
+Manual Yale authentication succeeded, but automated browser windows encountered
+Cloudflare security-verification loops. These were not accepted as successful
+authenticated reads. The existing ordinary Chrome session remained signed in;
+a newly created CMS dashboard tab in that session also authenticated successfully.
+
+Version 0.1.1 changes the product to **Yale SOM CMS [Tethered]**, with no
+headless serving mode. End-to-end native MCP acceptance through its scoped
+connection is still being recorded. Existing 0.1.0 fixture evidence below
+does not certify the changed connection architecture. No live student writes
+have been used as tests.
+
+Cloudflare documents its challenge paths and the limitations of automated
+browsers: [reserved endpoints](https://developers.cloudflare.com/fundamentals/reference/cdn-cgi-endpoint/),
+[challenge detection](https://developers.cloudflare.com/cloudflare-challenges/challenge-types/challenge-pages/detect-response/),
+[supported browsers](https://developers.cloudflare.com/cloudflare-challenges/reference/supported-browsers/).
+No CAPTCHA solving, browser fingerprint changes or user-agent overrides are included.
 
 The student tool surface includes dashboard, jobs, applications, interviews,
 events, appointments, employers, contacts, documents, resources, profile and
@@ -36,6 +68,31 @@ unrestricted HTTP requests.
 Desktop authentication runs the login command. Setup verification calls only
 `cms_session_status` and `cms_get_dashboard`; it does not submit applications,
 register for events, book appointments or change a profile.
+
+## Tethered candidate verification
+
+The native Windows development candidate completed two MCP process starts
+against the same ordinary Chrome session, discovering 39 tools each time.
+Both starts returned an authenticated session and dashboard data; Chrome
+remained running after each disconnect. A subsequent live MCP read matrix
+completed all 21 student areas with explicit `America/New_York` time zones
+and continuation tokens where applicable. The matrix completed at
+`2026-11-11T17:21:25.914Z`. These are candidate-source observations, pending
+repetition against the published artifact and Desktop setup.
+
+A live dashboard read exposed an Angular readiness race: the application's
+injector belongs to its main element, not the document body. The readiness
+check now waits for that injector's CMS API requests. A synthetic browser
+regression failed before the change and passed afterward; a subsequent live
+read had no pending CMS requests when recommendations were extracted.
+
+Confirmed writes also bind the observed tenant authentication cookie to the
+preview in memory. Before an unsafe request is released, its actual paused
+Cookie header and Chrome's current CMS session must both match. Only a
+hash enters account binding; cookie values never appear in tool output,
+logs or persisted state. Fixtures cover an account switch after preview and
+during durable journaling, with zero provider POSTs and an uncertain journal
+when a commit was already armed. No live student writes were performed.
 
 ## Reviewed native workflow boundaries
 
@@ -60,7 +117,7 @@ These are implementation boundaries, not claims of live write acceptance.
 The workflow and service-integration fixtures remain distinct from the
 account-level checks and native artifact evidence below.
 
-## Automated evidence
+## Historical 0.1.0 automated evidence
 
 The Desktop catalog/runtime implementation was checked on WSL with 29 shared
 protocol tests and 18 selected catalog, npm-install and setup tests. Its stdio
@@ -157,17 +214,16 @@ appointment booking, document upload or profile change was used as a test.
 
 ## Pending live acceptance
 
-The initial dedicated-profile sign-in attempt timed out. A later visible
-login window was reopened, but no completed authentication or restart
-persistence has been verified for that connector profile. Native
-Desktop fixture/package success and ordinary-Chrome discovery are separate
-from this pending authenticated acceptance.
+Manual dedicated-profile authentication succeeded, but automated browser
+acceptance encountered the Cloudflare loop described above. The new tethered
+connection uses the already-authenticated ordinary Chrome session. Its final
+native checks, restart behavior and Desktop setup still require verification.
 
 Before activation, record the exact npm version, OS and architecture, browser
 version, Node/Desktop version and UTC timestamp, together with the observed
 results for:
 
-- Manual dedicated-profile sign-in, headless authenticated reads and restart
+- Manual Chrome sign-in, tethered authenticated reads and restart
   persistence.
 - Published-package installation and Desktop authentication/setup verification.
 - Read tools and document downloads against the account's accessible modules.
@@ -210,7 +266,7 @@ npm --prefix connectors/yale-som-cms-mcp ci --ignore-scripts --workspaces=false
 npm --prefix connectors/yale-som-cms-mcp run type-check
 npm --prefix connectors/yale-som-cms-mcp test
 npm --prefix connectors/yale-som-cms-mcp run test:browser
-npm run publish:npm -- yale-som-cms-mcp 0.1.0 --dry-run
+npm run publish:npm -- yale-som-cms-mcp 0.1.1 --dry-run
 ```
 
 The status output must be empty and both SHAs must match; do not rewrite remote
@@ -222,12 +278,22 @@ registry integrity verification, installation of the published package and
 authenticated Desktop acceptance remain separate steps. Do not activate the
 catalog from a dry-run result or inherit acceptance from a prior build.
 
-As of this review update on 2026-11-11, the source/package candidate remains
-unpublished. The npm web-login attempt expired, and registry authentication
-is absent. Desktop update signing-key availability is unverified. No signed
-release or published-package installation is claimed.
+As of this update, version 0.1.0 is published and npm authentication succeeded.
+Version 0.1.1 remains a candidate. The existing Desktop signing key was located
+in Doppler and its public half matched Desktop's pinned key in a memory-only
+preflight. No key contents were printed or saved. No new signed Desktop release
+or catalog activation has been claimed.
 
 The catalog remains `published: false`, `candidate: true`, with no acceptance
 records, and its review reference remains `reviews/yale-som-cms-mcp.md`.
 Record the final validated source commit, npm registry integrity and actual
 acceptance before changing publication or acceptance fields.
+
+## Integrated source verification on 2026-11-12
+
+The tethered CMS changes were integrated with current library main. The library
+catalog verification and CMS TypeScript check passed. All 79 unit/protocol tests
+and all 123 browser-fixture tests passed on WSL with Node 24.21.0 and installed
+Chrome. The catalog remains an unpublished 0.1.1 candidate with no acceptance
+records. These checks cover source and synthetic browser behavior. Published
+package installation and native student-account acceptance remain pending.

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ReadRequestGuard } from "../dist/browser.js";
-import { CMS_ORIGIN } from "../dist/types.js";
+import { CMS_ORIGIN, CmsError } from "../dist/types.js";
 
 async function request(guard, method, path, origin = CMS_ORIGIN) {
   let result;
@@ -101,4 +101,23 @@ test("external analytics POST is blocked without poisoning a later CMS read", as
     { code: "read_request_unreviewed" },
   );
   assert.doesNotThrow(() => guard.assertReadRequests());
+});
+
+test("each confirmed unsafe request rechecks its bound session and aborts before forwarding on change", async () => {
+  let checks = 0;
+  const guard = new ReadRequestGuard(async () => {
+    checks++;
+    if (checks === 2) throw new CmsError("account_changed", "Fixture session changed.");
+  });
+  await assert.rejects(() => guard.runMutation(async () => {
+    assert.equal(await request(guard, "POST", "/cdn-cgi/challenge-platform/fixture"), "allowed");
+    assert.equal(checks, 0, "browser infrastructure is not a student write");
+    assert.equal(await request(guard, "POST", "/api/v2/first-fixture"), "allowed");
+    assert.equal(await request(guard, "POST", "/api/v2/second-fixture"), "blocked");
+    assert.equal(await request(guard, "POST", "/api/v2/after-session-failure"), "blocked");
+    assert.equal(checks, 2, "a failed session check revokes the remaining mutation window");
+  }), { code: "account_changed" });
+  assert.equal(checks, 2);
+  assert.equal(await request(guard, "POST", "/api/v2/third-fixture"), "blocked");
+  assert.throws(() => guard.assertReadRequests(), { code: "read_request_unreviewed" });
 });

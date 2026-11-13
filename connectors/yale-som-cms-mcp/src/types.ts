@@ -216,6 +216,8 @@ export function errorResult(error: unknown) {
     };
   return {
     code: "cms_error",
-    message: error instanceof Error ? error.message : "CMS operation failed.",
+    // Browser/network errors can embed Cookie headers, signed URLs and call logs.
+    // Only intentional CmsError messages above are safe to return to a caller.
+    message: "CMS operation failed.",
   };
 }

@@ -40,7 +40,7 @@ export class BrowserAdapter implements CmsAdapter {
       mutation_support:
         "Account- and record-dependent. Call cms_get_form for the exact record; unavailable or unrecognized controls fail closed.",
       authentication:
-        "Interactive login in a dedicated persistent Chrome profile; headless Chrome reuses that profile.",
+        "Manual authentication in the visible Chrome CMS tab; Chrome retains the session and the connector uses only its own tab.",
       preview:
         "Local draft only; no field edits or uploads until explicit confirmation.",
       confirmation_ttl_seconds: 600,

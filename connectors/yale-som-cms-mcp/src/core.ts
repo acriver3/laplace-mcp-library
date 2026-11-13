@@ -223,7 +223,7 @@ export class CmsService {
     if (!this.journal)
       throw new CmsError(
         "journal_unconfigured",
-        "Start the connector with its dedicated profile directory before preparing changes.",
+        "Start the connector with its dedicated local state directory before preparing changes.",
       );
     return this.journal;
   }
@@ -538,7 +538,7 @@ export class CmsService {
   async recoveryStatus() {
     return this.run(() => this.recovery());
   }
-  /** CLI-only: caller must hold the dedicated browser profile lock and inspect CMS first. */
+  /** CLI-only: caller must hold the connector state lock and inspect CMS first. */
   async acknowledgeUncertain(input: { acknowledge: true; note: string }) {
     return this.run(async () => {
       if (

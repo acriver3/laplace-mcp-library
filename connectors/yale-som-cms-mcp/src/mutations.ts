@@ -871,8 +871,10 @@ export class CmsMutations {
     }
   }
   async prepare(change: Change): Promise<Prepared> {
-    const identity = await this.browser.identity();
     const opened = await this.open(change);
+    // Opening navigates afresh. Bind the preview to the account that actually
+    // supplied this form, including the current shared Chrome sign-in session.
+    const identity = await this.browser.identity();
     this.validateIntent(change, opened.form);
     if (opened.eventWorkflow)
       validateEventWorkflow(opened.eventWorkflow, change);

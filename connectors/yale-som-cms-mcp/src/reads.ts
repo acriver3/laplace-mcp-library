@@ -1,7 +1,11 @@
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, open, realpath, unlink } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
-import type { Locator, Page } from "playwright-core";
+import {
+  errors as playwrightErrors,
+  type Locator,
+  type Page,
+} from "playwright-core";
 import { CmsBrowser } from "./browser.js";
 import {
   areas,
@@ -245,7 +249,7 @@ export class CmsReads {
       filters:
         "Use the filter names and options returned by read results. Filters operate the site search controls. Unavailable or unrecognized controls return explicit errors.",
       authentication:
-        "Complete sign-in yourself with login; the dedicated saved profile is used headlessly for subsequent tools.",
+        "Keep your normal Chrome running with remote debugging enabled. Complete Yale/12twenty sign-in yourself; the connector uses one owned tab in that visible session.",
       limitations: [
         "Third-party employer applications require opening the external link.",
         "Interview availability comes from My Interview Availability; interview scheduling actions depend on the account and job.",
@@ -381,32 +385,74 @@ export class CmsReads {
     return page;
   }
 
+  private async readinessFailure(
+    page: Page,
+    error: unknown,
+    phase: "main_content" | "loading_state",
+  ): Promise<never> {
+    // Check authentication only after the normal content/readiness wait fails.
+    // A known challenge must not be mislabeled as a changed layout or expired login.
+    if (!page.isClosed()) {
+      try {
+        await this.browser.identity();
+      } catch (identityError) {
+        if (
+          identityError instanceof CmsError &&
+          [
+            "auth_required",
+            "browser_challenge",
+            "account_not_student",
+          ].includes(identityError.code)
+        )
+          throw identityError;
+        // Preserve the original readiness failure when the identity check itself
+        // cannot run (for example a page or browser that was just closed).
+      }
+    }
+    if (error instanceof playwrightErrors.TimeoutError) {
+      if (phase === "loading_state")
+        throw new CmsError(
+          "page_not_ready",
+          "CMS is still loading or its layout changed. Retry the read after the page finishes.",
+        );
+      throw new CmsError(
+        "page_changed",
+        "CMS did not expose the expected main content.",
+      );
+    }
+    const cause = (error instanceof Error ? error.message : String(error))
+      .split(/\r?\n/)[0]
+      .replace(/https?:\/\/[^\s)\]}>]+/gi, "[URL]")
+      .replace(
+        /\b(?:authorization|cookie|[a-z0-9_-]*token|csrf|password|secret)\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|[^,;\s]+)/gi,
+        "[redacted]",
+      )
+      .replace(/\bBearer\s+[a-z0-9._~+\/-]+/gi, "Bearer [redacted]")
+      .slice(0, 400);
+    throw new CmsError(
+      "page_changed",
+      "The CMS readiness check failed before its loading timeout. Its page or browser API may have changed.",
+      { phase, cause },
+    );
+  }
+
   private async settled(page: Page) {
     await page
       .locator(MAIN)
       .first()
       .waitFor({ state: "visible", timeout: 20_000 })
-      .catch(async () => {
-        if (
-          new URL(page.url()).origin !== CMS_ORIGIN ||
-          /login|signin|sso/i.test(new URL(page.url()).pathname)
-        )
-          throw new CmsError(
-            "auth_required",
-            "Run login and complete sign-in in the dedicated browser.",
-          );
-        throw new CmsError(
-          "page_changed",
-          "CMS did not expose the expected main content.",
-        );
-      });
+      .catch((error: unknown) =>
+        this.readinessFailure(page, error, "main_content"),
+      );
     await page
       .waitForFunction(
         () => {
           const root = document.querySelector("[role=main],main");
           if (!root || !(root as HTMLElement).innerText.trim()) return false;
           const angular = (window as any).angular;
-          const injector = angular?.element(document.body).injector();
+          const injector =
+            angular?.element(root).injector() ||
+            angular?.element(document.body).injector();
           if (
             injector?.has("$http") &&
             injector
@@ -439,12 +485,9 @@ export class CmsReads {
         undefined,
         { timeout: 20_000 },
       )
-      .catch(() => {
-        throw new CmsError(
-          "page_not_ready",
-          "CMS is still loading or its layout changed. Retry the read after the page finishes.",
-        );
-      });
+      .catch((error: unknown) =>
+        this.readinessFailure(page, error, "loading_state"),
+      );
     const error = await page.locator(MAIN).first().innerText();
     if (
       /^(Access Denied|Forbidden|Unauthorized|You do not have (?:permission|access)|Page not found)\b/i.test(
